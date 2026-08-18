@@ -12,42 +12,44 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการพื้นหลัง Gradient และการ์ดชั้นเดียว ---
+# --- CSS จัดการพื้นหลัง Gradient และการ์ดชั้นเดียว (รองรับทั้ง Local & Streamlit Cloud) ---
 st.markdown("""
 <style>
-    /* 1. บังคับพื้นหลัง Gradient ทั้งหมด ทุกระดับ Body/App */
-    html, body, .stApp, [data-testid="stAppViewContainer"] {
+    /* 1. พื้นหลัง Gradient ทั่วทั้งหน้าจอ */
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างพื้นหลัง/กรอบ/เงาของคอนเทนเนอร์ระดับหน้าทั้งหมด */
-    header, footer, .stMain, .block-container,
+    /* 2. ล้างพื้นหลัง/กรอบของ Layout หลัก */
+    header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
     [data-testid="stHorizontalBlock"],
     [data-testid="column"],
-    [data-testid="stColumn"],
-    [data-testid="stVerticalBlock"] {
+    [data-testid="stColumn"] {
         background: transparent !important;
         background-color: transparent !important;
         box-shadow: none !important;
         border: none !important;
     }
 
-    /* 3. ล้าง div ลูกข้างใน container เพื่อไม่ให้เกิดกรอบซ้อนด้านใน */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+    /* 3. ล้าง div ชั้นในไม่ให้ซ้อนเลเยอร์ */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    div[data-testid="stVerticalBlock"] > div[style*="border"] {
         background: transparent !important;
         background-color: transparent !important;
-        border: none !important;
         box-shadow: none !important;
-        padding: 0 !important;
     }
 
-    /* 4. ใส่สีขาวและเงาที่การ์ดตัวนอกสุดเพียงชั้นเดียว */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
+    /* 4. กำหนดการ์ดสีขาวนูนชั้นเดียว (จับทุกรูปแบบ container border ของ Cloud และ Local) */
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stVerticalBlock"] > div[style*="border-width: 1px"],
+    div[data-testid="stVerticalBlock"] > div[style*="border: 1px solid"] {
         background: #ffffff !important;
+        background-color: #ffffff !important;
         border: none !important;
         outline: none !important;
         border-radius: 24px !important;
@@ -178,10 +180,7 @@ def word_count(lyrics: str):
     non_common_total_count = 0
     
     for w in lyrics_token_clean:
-        # นับคำทั้งหมด
         wordcount_all[w] = wordcount_all.get(w, 0) + 1
-        
-        # นับเฉพาะคำที่ไม่ใช่ Common / Stop Words
         if w not in ALL_COMMON_WORDS:
             wordcount_content[w] = wordcount_content.get(w, 0) + 1
             non_common_total_count += 1
@@ -358,7 +357,7 @@ with r3_right:
             top_15_content = df_content.head(15)
             
             bars_content = alt.Chart(top_15_content).mark_bar(
-                color="#6366f1",  # สีม่วง Indigo ให้แยกความแตกต่างชัดเจน
+                color="#6366f1",
                 cornerRadiusTopLeft=4,
                 cornerRadiusTopRight=4,
                 width=14
