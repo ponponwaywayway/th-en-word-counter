@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่รองหลัง + การ์ดสีขาว ---
+# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
@@ -22,20 +22,21 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. กรอบสี่เหลี่ยมบานใหญ่รองด้านหลังคอนเทนต์ทั้งหมด (Main Board Panel) */
+    /* 2. กรอบสี่เหลี่ยมใหญ่: ลดความกว้าง + จัดกึ่งกลาง เว้นระยะขอบจอสวยงาม */
     .block-container, [data-testid="stMainBlockContainer"] {
-        background: rgba(255, 255, 255, 0.5) !important;
-        backdrop-filter: blur(14px) saturate(160%) !important;
-        -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+        max-width: 1200px !important;
+        width: 90% !important;
+        margin: 36px auto 48px auto !important;
+        background: rgba(255, 255, 255, 0.45) !important;
+        backdrop-filter: blur(16px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
         border-radius: 36px !important;
         padding: 36px 40px !important;
-        margin-top: 24px !important;
-        margin-bottom: 36px !important;
-        border: 2px solid rgba(255, 255, 255, 0.8) !important;
-        box-shadow: 0 16px 45px rgba(135, 120, 175, 0.14) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
+        box-shadow: 0 16px 40px rgba(135, 120, 175, 0.12) !important;
     }
 
-    /* 3. ล้างพื้นหลังส่วน Header/Footer */
+    /* 3. ล้างพื้นหลังส่วน Layout อื่นๆ */
     header, footer, [data-testid="stAppViewBlockContainer"], [data-testid="stHorizontalBlock"] {
         background: transparent !important;
         background-color: transparent !important;
@@ -43,13 +44,13 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 4. สไตล์การ์ดสีขาวนูนแท้ 100% (Solid White Cards) */
+    /* 4. สไตล์การ์ดสีขาวนูน (Solid White Cards) */
     .white-card {
         background-color: #ffffff;
-        border-radius: 24px;
-        padding: 24px;
-        box-shadow: 0 10px 28px rgba(135, 120, 175, 0.12);
-        margin-bottom: 16px;
+        border-radius: 22px;
+        padding: 20px 24px;
+        box-shadow: 0 8px 24px rgba(135, 120, 175, 0.10);
+        margin-bottom: 14px;
     }
 
     /* 5. สไตล์ช่องกรอกข้อมูลและ Selectbox */
@@ -106,13 +107,13 @@ st.markdown("""
         margin-bottom: 12px;
     }
     .metric-title {
-        font-size: 1.02rem;
+        font-size: 0.98rem;
         font-weight: 600;
         color: #484a63;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .metric-value {
-        font-size: 3.2rem;
+        font-size: 2.8rem;
         font-weight: 800;
         color: #232536;
         line-height: 1.1;
@@ -125,12 +126,12 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
-    /* คลาสครอบกล่องที่มี widget ให้เป็นการ์ดสีขาว */
+    /* กล่อง Widget ฝังในสีขาว */
     .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, .st-key-table_box_2, .st-key-chart_box_2 {
         background: #ffffff !important;
-        border-radius: 24px !important;
+        border-radius: 22px !important;
         padding: 24px !important;
-        box-shadow: 0 10px 28px rgba(135, 120, 175, 0.12) !important;
+        box-shadow: 0 8px 24px rgba(135, 120, 175, 0.10) !important;
     }
 </style>
 """, unsafe_allow_html=True)
