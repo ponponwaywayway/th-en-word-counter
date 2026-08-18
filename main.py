@@ -3,7 +3,8 @@ import pandas as pd
 import operator
 import altair as alt
 from pythainlp import word_tokenize
-from pythainlp.corpus import thai_stopwords
+from pythainlp.corpus import thai_stopwords, thai_words
+from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
 
 # --- ตั้งค่าหน้าเว็บ ---
 st.set_page_config(
@@ -160,13 +161,31 @@ english_stop = {
 }
 ALL_COMMON_WORDS = thai_stop.union(english_stop)
 
-# --- ฟังก์ชันตัดและนับคำ ---
+# --- ดึงดัชนีความถี่คำมาตรฐานในภาษาไทย (TNC Frequency Dictionary) ---
+@st.cache_data
+def get_tnc_corpus_freq():
+    try:
+        freqs = tnc_word_freqs()
+        return dict(freqs) if freqs else {}
+    except Exception:
+        return {}
+
+TNC_FREQ_DICT = get_tnc_corpus_freq()
+
+def get_word_commonness(word: str) -> int:
+    """คืนค่าความถี่มาตรฐานในคลัง TNC (ถ้าเป็นคำใน Stop Words หรือพบมากในคลัง จะมีคะแนนสูง)"""
+    score = TNC_FREQ_DICT.get(word, 0)
+    if word in ALL_COMMON_WORDS:
+        score += 10_000_000
+    return score
+
+# --- ฟังก์ชันตัดและนับคำ (เรียงตามความถี่ในข้อความ และตามความ Common ในภาษา) ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
-    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'"}
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”'}
     lyrics_token_clean = []
     
     for w in lyrics_token:
@@ -189,8 +208,21 @@ def word_count(lyrics: str):
             wordcount_content[w] = wordcount_content.get(w, 0) + 1
             non_common_total_count += 1
 
-    sorted_all = dict(sorted(wordcount_all.items(), key=operator.itemgetter(1), reverse=True))
-    sorted_content = dict(sorted(wordcount_content.items(), key=operator.itemgetter(1), reverse=True))
+    # เรียงลำดับ 2 ชั้น: (1. จำนวนครั้งที่พบในข้อความ, 2. ความ Common ในภาษา)
+    sorted_all = dict(
+        sorted(
+            wordcount_all.items(),
+            key=lambda item: (item[1], get_word_commonness(item[0])),
+            reverse=True
+        )
+    )
+    sorted_content = dict(
+        sorted(
+            wordcount_content.items(),
+            key=lambda item: (item[1], get_word_commonness(item[0])),
+            reverse=True
+        )
+    )
     
     return sorted_all, sorted_content, non_common_total_count
 
