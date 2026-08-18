@@ -3,7 +3,7 @@ import pandas as pd
 import operator
 import altair as alt
 from pythainlp import word_tokenize
-from pythainlp.corpus import thai_stopwords, thai_words
+from pythainlp.corpus import thai_stopwords
 from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
 
 # --- ตั้งค่าหน้าเว็บ ---
@@ -143,7 +143,7 @@ english_stop = {
     'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've",
     "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his',
     'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself',
-    'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom',
+    'they', 'them', 'refer', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom',
     'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be',
     'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a',
     'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at',
@@ -161,7 +161,7 @@ english_stop = {
 }
 ALL_COMMON_WORDS = thai_stop.union(english_stop)
 
-# --- ดึงดัชนีความถี่คำมาตรฐานในภาษาไทย (TNC Frequency Dictionary) ---
+# --- ดึงดัชนีความถี่คำมาตรฐานจากคลัง TNC ---
 @st.cache_data
 def get_tnc_corpus_freq():
     try:
@@ -172,14 +172,14 @@ def get_tnc_corpus_freq():
 
 TNC_FREQ_DICT = get_tnc_corpus_freq()
 
-def get_word_commonness(word: str) -> int:
-    """คืนค่าความถี่มาตรฐานในคลัง TNC (ถ้าเป็นคำใน Stop Words หรือพบมากในคลัง จะมีคะแนนสูง)"""
+def get_corpus_frequency(word: str) -> int:
+    """คืนค่าความถี่ของคำในคลังภาษาไทยมาตรฐาน (ถ้าเป็น Stop Word จะกำหนดให้มีความถี่สูงมาก)"""
     score = TNC_FREQ_DICT.get(word, 0)
     if word in ALL_COMMON_WORDS:
-        score += 10_000_000
+        score += 100_000_000
     return score
 
-# --- ฟังก์ชันตัดและนับคำ (กรองตัวเลขออก + เรียงตามความถี่ในข้อความและตามความ Common) ---
+# --- ฟังก์ชันตัดและนับคำ ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0
@@ -191,13 +191,11 @@ def word_count(lyrics: str):
     for w in lyrics_token:
         clean_str = ""
         for s in w:
-            # ข้ามเครื่องหมายวรรคตอนและตัวเลขทุกชนิด (0-9 และ ๐-๙)
             if s not in sym and not s.isalpha() and not s.isdigit():
                 clean_str += s
             elif s.isalpha():
                 clean_str += s.lower()
                 
-        # เก็บเฉพาะ Token ที่มีตัวอักษรและไม่ใช่ตัวเลขล้วน
         if clean_str and clean_str not in sym and not clean_str.isdigit():
             lyrics_token_clean.append(clean_str)
 
@@ -211,23 +209,19 @@ def word_count(lyrics: str):
             wordcount_content[w] = wordcount_content.get(w, 0) + 1
             non_common_total_count += 1
 
-    # เรียงลำดับ 2 ชั้น: (1. จำนวนครั้งที่พบในข้อความ, 2. ความ Common ในภาษา)
-    sorted_all = dict(
-        sorted(
-            wordcount_all.items(),
-            key=lambda item: (item[1], get_word_commonness(item[0])),
-            reverse=True
-        )
+    # เรียงลำดับ: 
+    # 1. จำนวนครั้งในข้อความ (มาก -> น้อย) -> (-item[1])
+    # 2. ความถี่ในคลังภาษามาตรฐาน (น้อย -> มาก: เพื่อดันคำแปลก/คำเฉพาะขึ้นก่อน) -> (get_corpus_frequency(item[0]))
+    sorted_all_list = sorted(
+        wordcount_all.items(),
+        key=lambda item: (-item[1], get_corpus_frequency(item[0]))
     )
-    sorted_content = dict(
-        sorted(
-            wordcount_content.items(),
-            key=lambda item: (item[1], get_word_commonness(item[0])),
-            reverse=True
-        )
+    sorted_content_list = sorted(
+        wordcount_content.items(),
+        key=lambda item: (-item[1], get_corpus_frequency(item[0]))
     )
-    
-    return sorted_all, sorted_content, non_common_total_count
+
+    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count
 
 # --- จัดการ Session State ---
 if "wc_all" not in st.session_state:
@@ -344,7 +338,7 @@ with r2_right:
                 cornerRadiusTopRight=4,
                 width=14
             ).encode(
-                x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                x=alt.X("คำ (WORD):N", sort=top_15_all["คำ (WORD)"].tolist(), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
                 y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
@@ -356,7 +350,7 @@ with r2_right:
                 fontSize=11,
                 fontWeight=600
             ).encode(
-                x=alt.X("คำ (WORD):N", sort=None),
+                x=alt.X("คำ (WORD):N", sort=top_15_all["คำ (WORD)"].tolist()),
                 y=alt.Y("จำนวนครั้งที่พบ:Q"),
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
@@ -394,7 +388,7 @@ with r3_right:
                 cornerRadiusTopRight=4,
                 width=14
             ).encode(
-                x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                x=alt.X("คำ (WORD):N", sort=top_15_content["คำ (WORD)"].tolist(), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
                 y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
@@ -406,7 +400,7 @@ with r3_right:
                 fontSize=11,
                 fontWeight=600
             ).encode(
-                x=alt.X("คำ (WORD):N", sort=None),
+                x=alt.X("คำ (WORD):N", sort=top_15_content["คำ (WORD)"].tolist()),
                 y=alt.Y("จำนวนครั้งที่พบ:Q"),
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
