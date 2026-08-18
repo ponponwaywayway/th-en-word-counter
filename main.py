@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการพื้นหลัง Gradient และการ์ดสีขาวไร้ขอบ (Solid White Cards - No Border) ---
+# --- CSS จัดการพื้นหลัง Gradient และการ์ดสีขาวทึบ ไร้เส้นขอบ (Solid White Cards) ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
+    /* 1. พื้นหลังหลัก Gradient ทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างกรอบและพื้นหลังระดับ Page Layout ทั้งหมด */
+    /* 2. ล้างกรอบคอนเทนเนอร์ระดับหน้าจอทั้งหมด */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,30 +35,23 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. การ์ดสีขาวนวลทึบ ไร้ขอบ (Solid White with Shadow & No Border) */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
+    /* 3. การ์ดสีขาวทึบ ไร้ขอบ 100% (Solid White Card - ลบขอบเทาออกทั้งหมด) */
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
         background: #ffffff !important;
         background-color: #ffffff !important;
         border: none !important;
+        border-color: transparent !important;
         outline: none !important;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 24px !important;
         padding: 24px !important;
         box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
     }
 
-    /* 4. ล้างเส้นขอบของ div ด้านในทั้งหมดเพื่อไม่ให้มีเส้นขอบใดๆ โผล่ออกมา */
-    div[data-testid="stVerticalBlockBorderWrapper"] * {
-        outline: none !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        background: transparent !important;
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }
-
-    /* 5. กล่อง Text Area & Selectbox */
+    /* 4. กล่อง Text Area & Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
@@ -79,7 +72,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผลสีกรมท่าเข้ม */
+    /* 5. ปุ่มประมวลผลสีกรมท่าเข้ม */
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
@@ -99,7 +92,7 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* 7. Typography */
+    /* 6. Typography */
     .card-title {
         font-size: 1.15rem;
         font-weight: 700;
@@ -124,7 +117,7 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 8. Dataframe Light Theme */
+    /* 7. Dataframe Light Theme */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #edf0f7 !important;
