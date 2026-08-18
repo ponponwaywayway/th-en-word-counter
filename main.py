@@ -12,39 +12,47 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS พื้นฐานระดับหน้าจอและอินพุต ---
+# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่รองหลัง + การ์ดสีขาว ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient ทั้งหน้าจอ */
+    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างกรอบของระบบ Streamlit ทั้งหมด */
-    header, footer, .block-container,
-    [data-testid="stMainBlockContainer"],
-    [data-testid="stAppViewBlockContainer"],
-    [data-testid="stHorizontalBlock"],
-    [data-testid="column"],
-    [data-testid="stColumn"] {
+    /* 2. กรอบสี่เหลี่ยมบานใหญ่รองด้านหลังคอนเทนต์ทั้งหมด (Main Board Panel) */
+    .block-container, [data-testid="stMainBlockContainer"] {
+        background: rgba(255, 255, 255, 0.5) !important;
+        backdrop-filter: blur(14px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+        border-radius: 36px !important;
+        padding: 36px 40px !important;
+        margin-top: 24px !important;
+        margin-bottom: 36px !important;
+        border: 2px solid rgba(255, 255, 255, 0.8) !important;
+        box-shadow: 0 16px 45px rgba(135, 120, 175, 0.14) !important;
+    }
+
+    /* 3. ล้างพื้นหลังส่วน Header/Footer */
+    header, footer, [data-testid="stAppViewBlockContainer"], [data-testid="stHorizontalBlock"] {
         background: transparent !important;
         background-color: transparent !important;
         box-shadow: none !important;
         border: none !important;
     }
 
-    /* 3. สไตล์การ์ดสีขาวแท้ 100% ไม่พึ่ง selector ระบบ */
+    /* 4. สไตล์การ์ดสีขาวนูนแท้ 100% (Solid White Cards) */
     .white-card {
         background-color: #ffffff;
         border-radius: 24px;
         padding: 24px;
-        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16);
+        box-shadow: 0 10px 28px rgba(135, 120, 175, 0.12);
         margin-bottom: 16px;
     }
 
-    /* 4. สไตล์ช่องกรอกข้อมูลและ Selectbox */
+    /* 5. สไตล์ช่องกรอกข้อมูลและ Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
@@ -65,7 +73,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 5. ปุ่มประมวลผล */
+    /* 6. ปุ่มประมวลผล */
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
@@ -85,7 +93,7 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* 6. Typography */
+    /* 7. Typography */
     .card-title {
         font-size: 1.15rem;
         font-weight: 700;
@@ -110,19 +118,19 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 7. ครอบตารางและกราฟให้อยู่ในการ์ดสีขาว */
+    /* 8. สไตล์ตาราง Dataframe */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #edf0f7 !important;
         border-radius: 12px !important;
     }
 
-    /* ปรับแต่ง wrapper เพื่อให้ input/dataframe/chart ฝังในกล่องขาวได้เนียน */
+    /* คลาสครอบกล่องที่มี widget ให้เป็นการ์ดสีขาว */
     .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, .st-key-table_box_2, .st-key-chart_box_2 {
         background: #ffffff !important;
         border-radius: 24px !important;
         padding: 24px !important;
-        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
+        box-shadow: 0 10px 28px rgba(135, 120, 175, 0.12) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -257,7 +265,6 @@ with r1_right:
     unique_tokens = len(st.session_state.wc_all) if st.session_state.wc_all else 0
     non_common_words = st.session_state.non_common_total if st.session_state.wc_all else 0
     
-    # การ์ดทั้ง 3 ใบใช้ class .white-card แท้ ไม่โดน selector ระบบกวน
     st.markdown(f"""
     <div class="white-card">
         <div class="metric-title">จำนวนคำทั้งหมด (Total Tokens)</div>
