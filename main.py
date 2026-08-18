@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการพื้นหลัง Gradient และการ์ดชั้นเดียว (รองรับทั้ง Local & Streamlit Cloud) ---
+# --- CSS Glassmorphism Style ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient ทั่วทั้งหน้าจอ */
+    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างพื้นหลัง/กรอบของ Layout หลัก */
+    /* 2. ล้างพื้นหลัง/กรอบของ Container ระดับหน้าจอ */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,32 +35,30 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. ล้าง div ชั้นในไม่ให้ซ้อนเลเยอร์ */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div,
-    div[data-testid="stVerticalBlock"] > div[style*="border"] {
+    /* 3. ล้าง div ลูกข้างในไม่ให้เกิดกรอบซ้อน */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
         background: transparent !important;
         background-color: transparent !important;
+        border: none !important;
         box-shadow: none !important;
+        padding: 0 !important;
     }
 
-    /* 4. กำหนดการ์ดสีขาวนูนชั้นเดียว (จับทุกรูปแบบ container border ของ Cloud และ Local) */
-    div[data-testid="stVerticalBlockBorderWrapper"],
-    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"],
-    div[data-testid="stVerticalBlock"] > div[style*="border-width: 1px"],
-    div[data-testid="stVerticalBlock"] > div[style*="border: 1px solid"] {
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        border: none !important;
-        outline: none !important;
+    /* 4. การ์ดสีขาว Glassmorphism (กระจกฝ้าโปร่งแสง) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255, 255, 255, 0.65) !important;
+        backdrop-filter: blur(14px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.85) !important;
         border-radius: 24px !important;
         padding: 24px !important;
-        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
+        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.12) !important;
     }
 
     /* 5. สไตล์ Text Area & Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
-        background: #fbfbfe !important;
-        border: 1.5px solid #e2e5f0 !important;
+        background: rgba(255, 255, 255, 0.5) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
         border-radius: 14px !important;
         color: #2b2d42 !important;
         font-size: 0.95rem !important;
@@ -71,6 +69,7 @@ st.markdown("""
     .stTextArea textarea:focus {
         border-color: #7b7393 !important;
         box-shadow: 0 0 0 2px rgba(123, 115, 147, 0.15) !important;
+        background: rgba(255, 255, 255, 0.8) !important;
     }
     .stTextArea label p, .stSelectbox label p {
         color: #555770 !important;
@@ -123,10 +122,10 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 8. Dataframe Light Theme */
+    /* 8. Dataframe แบบโปร่งแสงเข้ากับการ์ดกระจก */
     div[data-testid="stDataFrame"] {
-        background-color: #ffffff !important;
-        border: 1px solid #edf0f7 !important;
+        background-color: rgba(255, 255, 255, 0.4) !important;
+        border: 1px solid rgba(255, 255, 255, 0.6) !important;
         border-radius: 12px !important;
     }
 </style>
@@ -156,7 +155,7 @@ english_stop = {
 }
 ALL_COMMON_WORDS = thai_stop.union(english_stop)
 
-# --- ฟังก์ชันตัดและนับคำ (แยกคำทั้งหมด และคำที่ไม่ใช่ Stop Words) ---
+# --- ฟังก์ชันตัดและนับคำ ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0
@@ -313,7 +312,7 @@ with r2_right:
                 width=14
             ).encode(
                 x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
-                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
+                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="rgba(0,0,0,0.05)", tickColor="#cbd5e1"))
             )
             
             text_labels = alt.Chart(top_15_all).mark_text(
@@ -329,7 +328,7 @@ with r2_right:
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
             
-            chart_all = (bars + text_labels).properties(height=260, background="#ffffff").configure_view(strokeWidth=0)
+            chart_all = (bars + text_labels).properties(height=260, background="transparent").configure_view(strokeWidth=0)
             st.altair_chart(chart_all, use_container_width=True)
         else:
             st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
@@ -363,7 +362,7 @@ with r3_right:
                 width=14
             ).encode(
                 x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
-                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
+                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="rgba(0,0,0,0.05)", tickColor="#cbd5e1"))
             )
             
             text_labels_content = alt.Chart(top_15_content).mark_text(
@@ -379,7 +378,7 @@ with r3_right:
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
             
-            chart_content = (bars_content + text_labels_content).properties(height=260, background="#ffffff").configure_view(strokeWidth=0)
+            chart_content = (bars_content + text_labels_content).properties(height=260, background="transparent").configure_view(strokeWidth=0)
             st.altair_chart(chart_content, use_container_width=True)
         else:
             st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
