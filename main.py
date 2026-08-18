@@ -179,23 +179,26 @@ def get_word_commonness(word: str) -> int:
         score += 10_000_000
     return score
 
-# --- ฟังก์ชันตัดและนับคำ (เรียงตามความถี่ในข้อความ และตามความ Common ในภาษา) ---
+# --- ฟังก์ชันตัดและนับคำ (กรองตัวเลขออก + เรียงตามความถี่ในข้อความและตามความ Common) ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
-    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '/'}
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '/', '\\'}
     lyrics_token_clean = []
     
     for w in lyrics_token:
         clean_str = ""
         for s in w:
-            if s not in sym and not s.isalpha():
+            # ข้ามเครื่องหมายวรรคตอนและตัวเลขทุกชนิด (0-9 และ ๐-๙)
+            if s not in sym and not s.isalpha() and not s.isdigit():
                 clean_str += s
             elif s.isalpha():
                 clean_str += s.lower()
-        if clean_str and clean_str not in sym:
+                
+        # เก็บเฉพาะ Token ที่มีตัวอักษรและไม่ใช่ตัวเลขล้วน
+        if clean_str and clean_str not in sym and not clean_str.isdigit():
             lyrics_token_clean.append(clean_str)
 
     wordcount_all = {}
