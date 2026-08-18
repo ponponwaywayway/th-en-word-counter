@@ -185,7 +185,7 @@ def word_count(lyrics: str):
         return {}, {}, 0
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
-    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”'}
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '/'}
     lyrics_token_clean = []
     
     for w in lyrics_token:
