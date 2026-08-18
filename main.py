@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการพื้นหลัง Gradient และการ์ดสีขาวทึบ ไร้เส้นขอบ (Solid White Cards) ---
+# --- CSS จัดการพื้นหลัง Gradient และการ์ดสีขาวทึบ ไร้เส้นขอบ ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลังหลัก Gradient ทั้งหน้าจอ */
+    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างกรอบคอนเทนเนอร์ระดับหน้าจอทั้งหมด */
+    /* 2. ล้างกรอบและพื้นหลังระดับ Page Layout */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,13 +35,14 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. การ์ดสีขาวทึบ ไร้ขอบ 100% (Solid White Card - ลบขอบเทาออกทั้งหมด) */
+    /* 3. การ์ดสีขาวทึบ ไร้ขอบเทาอย่างเด็ดขาด */
     div[data-testid="stVerticalBlockBorderWrapper"],
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    div[data-testid="stVerticalBlock"] > div[style*="border"] {
         background: #ffffff !important;
         background-color: #ffffff !important;
-        border: none !important;
-        border-color: transparent !important;
+        border: 0px solid transparent !important;
+        border-style: none !important;
         outline: none !important;
     }
 
@@ -51,7 +52,7 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
     }
 
-    /* 4. กล่อง Text Area & Selectbox */
+    /* 4. ช่อง Text Area & Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
