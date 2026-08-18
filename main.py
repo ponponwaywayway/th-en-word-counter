@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS บังคับพื้นหลัง Gradient และการ์ดสีขาวทึบชั้นเดียว ---
+# --- CSS พื้นฐานระดับหน้าจอและอินพุต ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
+    /* 1. พื้นหลัง Gradient ทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างค่าพื้นหลังคอนเทนเนอร์ระดับ Layout */
+    /* 2. ล้างกรอบของระบบ Streamlit ทั้งหมด */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,27 +35,16 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. ล็อคให้ทุก Container ที่เป็น Border กลายเป็นกล่องสีขาวทึบ ไร้ขอบเทา */
-    div[data-testid="stVerticalBlockBorderWrapper"],
-    div[data-testid="stVerticalBlockBorderWrapper"] > div,
-    [data-testid="stColumn"] div[style*="border"],
-    div[class*="stVerticalBlockBorderWrapper"],
-    div[class*="st-emotion-cache"] div[style*="border"] {
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        border: none !important;
-        border-color: transparent !important;
-        outline: none !important;
+    /* 3. สไตล์การ์ดสีขาวแท้ 100% ไม่พึ่ง selector ระบบ */
+    .white-card {
+        background-color: #ffffff;
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16);
+        margin-bottom: 16px;
     }
 
-    div[data-testid="stVerticalBlockBorderWrapper"],
-    [data-testid="stColumn"] > div > div > div[style*="border"] {
-        border-radius: 24px !important;
-        padding: 24px !important;
-        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
-    }
-
-    /* 4. กล่อง Text Area & Selectbox */
+    /* 4. สไตล์ช่องกรอกข้อมูลและ Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
@@ -76,7 +65,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 5. ปุ่มประมวลผลสีกรมท่าเข้ม */
+    /* 5. ปุ่มประมวลผล */
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
@@ -121,11 +110,19 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 7. Dataframe Light Theme */
+    /* 7. ครอบตารางและกราฟให้อยู่ในการ์ดสีขาว */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #edf0f7 !important;
         border-radius: 12px !important;
+    }
+
+    /* ปรับแต่ง wrapper เพื่อให้ input/dataframe/chart ฝังในกล่องขาวได้เนียน */
+    .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, .st-key-table_box_2, .st-key-chart_box_2 {
+        background: #ffffff !important;
+        border-radius: 24px !important;
+        padding: 24px !important;
+        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -217,7 +214,7 @@ def apply_history():
 r1_left, r1_right = st.columns([1.3, 1], gap="medium")
 
 with r1_left:
-    with st.container(border=True):
+    with st.container(key="input_box"):
         st.markdown('<div class="card-title">📝 Thai Word Counter & Frequency Analyzer</div>', unsafe_allow_html=True)
         st.markdown('<div class="card-subtitle">วางเนื้อเพลงหรือข้อความภาษาไทยหรืออังกฤษเพื่อวิเคราะห์และนับความถี่ของคำ</div>', unsafe_allow_html=True)
         
@@ -260,32 +257,23 @@ with r1_right:
     unique_tokens = len(st.session_state.wc_all) if st.session_state.wc_all else 0
     non_common_words = st.session_state.non_common_total if st.session_state.wc_all else 0
     
-    # 1. Total Tokens
-    with st.container(border=True):
-        st.markdown(f"""
+    # การ์ดทั้ง 3 ใบใช้ class .white-card แท้ ไม่โดน selector ระบบกวน
+    st.markdown(f"""
+    <div class="white-card">
         <div class="metric-title">จำนวนคำทั้งหมด (Total Tokens)</div>
         <div class="metric-value">{total_tokens:,}</div>
-        """, unsafe_allow_html=True)
-        
-    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-    
-    # 2. Unique Words
-    with st.container(border=True):
-        st.markdown(f"""
+    </div>
+    <div class="white-card">
         <div class="metric-title">จำนวนคำที่ไม่ซ้ำกัน (Unique Words)</div>
         <div class="metric-value">{unique_tokens:,}</div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-
-    # 3. Non-Common Words
-    with st.container(border=True):
-        st.markdown(f"""
+    </div>
+    <div class="white-card">
         <div class="metric-title">คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)</div>
         <div class="metric-value">{non_common_words:,}</div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
-st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # ==================== แถวที่ 2 (ชุดที่ 1: คำทั้งหมด All Words) ====================
 r2_left, r2_right = st.columns([1, 1.3], gap="medium")
@@ -297,12 +285,12 @@ else:
     df_all = pd.DataFrame(columns=["ลำดับ", "คำ (WORD)", "จำนวนครั้งที่พบ"])
 
 with r2_left:
-    with st.container(border=True):
+    with st.container(key="table_box_1"):
         st.markdown('<div class="card-title">📊 ตารางแจกแจงความถี่ (คำทั้งหมด)</div>', unsafe_allow_html=True)
         st.dataframe(df_all, hide_index=True, use_container_width=True, height=280)
 
 with r2_right:
-    with st.container(border=True):
+    with st.container(key="chart_box_1"):
         st.markdown('<div class="card-title">📈 คำที่พบมากที่สุด (Top 15 - รวมทุกคำ)</div>', unsafe_allow_html=True)
         if not df_all.empty:
             top_15_all = df_all.head(15)
@@ -335,7 +323,7 @@ with r2_right:
         else:
             st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
 
-st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # ==================== แถวที่ 3 (ชุดที่ 2: เฉพาะคำที่ไม่ใช่ Stop Words) ====================
 r3_left, r3_right = st.columns([1, 1.3], gap="medium")
@@ -347,12 +335,12 @@ else:
     df_content = pd.DataFrame(columns=["ลำดับ", "คำ (WORD)", "จำนวนครั้งที่พบ"])
 
 with r3_left:
-    with st.container(border=True):
+    with st.container(key="table_box_2"):
         st.markdown('<div class="card-title">🔍 ตารางแจกแจงความถี่ (ไม่รวม Stop Words)</div>', unsafe_allow_html=True)
         st.dataframe(df_content, hide_index=True, use_container_width=True, height=280)
 
 with r3_right:
-    with st.container(border=True):
+    with st.container(key="chart_box_2"):
         st.markdown('<div class="card-title">✨ คำสำคัญที่พบมากที่สุด (Top 15 - ไม่รวม Stop Words)</div>', unsafe_allow_html=True)
         if not df_content.empty:
             top_15_content = df_content.head(15)
