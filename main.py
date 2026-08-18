@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS Glassmorphism Style ---
+# --- CSS จัดการพื้นหลัง Gradient และการ์ดสีขาวไร้ขอบ (Solid White Cards - No Border) ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
@@ -22,7 +22,7 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้างพื้นหลัง/กรอบของ Container ระดับหน้าจอ */
+    /* 2. ล้างกรอบและพื้นหลังระดับ Page Layout ทั้งหมด */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,7 +35,21 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. ล้าง div ลูกข้างในไม่ให้เกิดกรอบซ้อน */
+    /* 3. การ์ดสีขาวนวลทึบ ไร้ขอบ (Solid White with Shadow & No Border) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        border: none !important;
+        outline: none !important;
+        border-radius: 24px !important;
+        padding: 24px !important;
+        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
+    }
+
+    /* 4. ล้างเส้นขอบของ div ด้านในทั้งหมดเพื่อไม่ให้มีเส้นขอบใดๆ โผล่ออกมา */
+    div[data-testid="stVerticalBlockBorderWrapper"] * {
+        outline: none !important;
+    }
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
         background: transparent !important;
         background-color: transparent !important;
@@ -44,21 +58,10 @@ st.markdown("""
         padding: 0 !important;
     }
 
-    /* 4. การ์ดสีขาว Glassmorphism (กระจกฝ้าโปร่งแสง) */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: rgba(255, 255, 255, 0.65) !important;
-        backdrop-filter: blur(14px) saturate(160%) !important;
-        -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.85) !important;
-        border-radius: 24px !important;
-        padding: 24px !important;
-        box-shadow: 0 10px 30px rgba(135, 120, 175, 0.12) !important;
-    }
-
-    /* 5. สไตล์ Text Area & Selectbox */
+    /* 5. กล่อง Text Area & Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
-        background: rgba(255, 255, 255, 0.5) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
+        background: #fbfbfe !important;
+        border: 1.5px solid #e2e5f0 !important;
         border-radius: 14px !important;
         color: #2b2d42 !important;
         font-size: 0.95rem !important;
@@ -69,7 +72,6 @@ st.markdown("""
     .stTextArea textarea:focus {
         border-color: #7b7393 !important;
         box-shadow: 0 0 0 2px rgba(123, 115, 147, 0.15) !important;
-        background: rgba(255, 255, 255, 0.8) !important;
     }
     .stTextArea label p, .stSelectbox label p {
         color: #555770 !important;
@@ -77,7 +79,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล */
+    /* 6. ปุ่มประมวลผลสีกรมท่าเข้ม */
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
@@ -122,10 +124,10 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 8. Dataframe แบบโปร่งแสงเข้ากับการ์ดกระจก */
+    /* 8. Dataframe Light Theme */
     div[data-testid="stDataFrame"] {
-        background-color: rgba(255, 255, 255, 0.4) !important;
-        border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        background-color: #ffffff !important;
+        border: 1px solid #edf0f7 !important;
         border-radius: 12px !important;
     }
 </style>
@@ -312,7 +314,7 @@ with r2_right:
                 width=14
             ).encode(
                 x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
-                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="rgba(0,0,0,0.05)", tickColor="#cbd5e1"))
+                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
             text_labels = alt.Chart(top_15_all).mark_text(
@@ -328,7 +330,7 @@ with r2_right:
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
             
-            chart_all = (bars + text_labels).properties(height=260, background="transparent").configure_view(strokeWidth=0)
+            chart_all = (bars + text_labels).properties(height=260, background="#ffffff").configure_view(strokeWidth=0)
             st.altair_chart(chart_all, use_container_width=True)
         else:
             st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
@@ -362,7 +364,7 @@ with r3_right:
                 width=14
             ).encode(
                 x=alt.X("คำ (WORD):N", sort=None, axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
-                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="rgba(0,0,0,0.05)", tickColor="#cbd5e1"))
+                y=alt.Y("จำนวนครั้งที่พบ:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
             text_labels_content = alt.Chart(top_15_content).mark_text(
@@ -378,7 +380,7 @@ with r3_right:
                 text=alt.Text("จำนวนครั้งที่พบ:Q")
             )
             
-            chart_content = (bars_content + text_labels_content).properties(height=260, background="transparent").configure_view(strokeWidth=0)
+            chart_content = (bars_content + text_labels_content).properties(height=260, background="#ffffff").configure_view(strokeWidth=0)
             st.altair_chart(chart_content, use_container_width=True)
         else:
             st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
