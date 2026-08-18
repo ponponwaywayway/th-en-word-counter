@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS Theme: จัดการการ์ดให้เป็นสีขาวทึบ ไร้ขอบเทา และไม่มีแท่งขาวลอย ---
+# --- CSS จัดการพื้นหลัง Gradient และบังคับการ์ดขาวทึบ ไร้ขอบเทา (Cloud-Proof) ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งจอ */
@@ -35,27 +35,26 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. กล่อง Card สีขาวทึบชั้นเดียว (สำหรับ st.container(border=True)) */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
+    /* 3. ล็อคให้ทุก Container ที่มี Border กลายเป็นกล่องสีขาวทึบ สวยงาม ไร้เส้นขอบเทา */
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    [data-testid="stColumn"] div[style*="border"],
+    div[class*="stVerticalBlockBorderWrapper"] {
         background: #ffffff !important;
         background-color: #ffffff !important;
         border: none !important;
+        border-color: transparent !important;
         outline: none !important;
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"],
+    [data-testid="stColumn"] > div > div > div[style*="border"] {
         border-radius: 24px !important;
         padding: 24px !important;
         box-shadow: 0 10px 30px rgba(135, 120, 175, 0.16) !important;
     }
 
-    /* 4. ล้างขอบและพื้นหลัง div ลูกข้างในทั้งหมด เพื่อไม่ให้เกิดกล่องซ้อน */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        background: transparent !important;
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }
-
-    /* 5. กล่อง Text Area & Selectbox */
+    /* 4. กล่อง Text Area & Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
@@ -76,7 +75,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผลสีกรมท่าเข้ม */
+    /* 5. ปุ่มประมวลผลสีกรมท่าเข้ม */
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
@@ -96,7 +95,7 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* 7. Typography */
+    /* 6. Typography */
     .card-title {
         font-size: 1.15rem;
         font-weight: 700;
@@ -121,7 +120,7 @@ st.markdown("""
         line-height: 1.1;
     }
 
-    /* 8. Dataframe Light Theme */
+    /* 7. Dataframe Light Theme */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #edf0f7 !important;
