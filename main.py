@@ -12,17 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการพื้นหลัง Gradient และบังคับการ์ดขาวทึบ ไร้ขอบเทา (Cloud-Proof) ---
+# --- CSS บังคับพื้นหลัง Gradient และการ์ดสีขาวทึบชั้นเดียว ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient พาสเทลทั้งจอ */
+    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. ล้าง Container ตัวแม่ระดับ Layout ให้โปร่งใส */
+    /* 2. ล้างค่าพื้นหลังคอนเทนเนอร์ระดับ Layout */
     header, footer, .block-container,
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
@@ -35,11 +35,12 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 3. ล็อคให้ทุก Container ที่มี Border กลายเป็นกล่องสีขาวทึบ สวยงาม ไร้เส้นขอบเทา */
+    /* 3. ล็อคให้ทุก Container ที่เป็น Border กลายเป็นกล่องสีขาวทึบ ไร้ขอบเทา */
     div[data-testid="stVerticalBlockBorderWrapper"],
     div[data-testid="stVerticalBlockBorderWrapper"] > div,
     [data-testid="stColumn"] div[style*="border"],
-    div[class*="stVerticalBlockBorderWrapper"] {
+    div[class*="stVerticalBlockBorderWrapper"],
+    div[class*="st-emotion-cache"] div[style*="border"] {
         background: #ffffff !important;
         background-color: #ffffff !important;
         border: none !important;
