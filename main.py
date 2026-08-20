@@ -190,9 +190,9 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึง Wongnai Corpus + Brown English Corpus พร้อมสร้าง Inverted Index ---
+# --- ดึงและรวมทุกคลังประโยค (Wongnai + Tatoeba + Master Corpus + Brown) ---
 @st.cache_resource(show_spinner=False)
-def build_wongnai_and_brown_index():
+def build_combined_corpus_index():
     index_eng = {}
     index_thai = {}
 
@@ -216,28 +216,39 @@ def build_wongnai_and_brown_index():
     except Exception:
         pass
 
-    # 2. ภาษาไทย: ดึง Wongnai Corpus และคลังประโยคภาษาไทย
-    thai_sentences = []
-    
-    # 2.1 ดึง Wongnai Review Datasets
+    # 2. รวมคลังประโยคภาษาไทยทั้งหมด
+    thai_entries = []
+
+    # 2.1 ดึง Wongnai Dataset
     wongnai_url = "https://raw.githubusercontent.com/PyThaiNLP/pythainlp-corpus/master/wongnai/wongnai_reviews.txt"
     try:
         req = urllib.request.Request(wongnai_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=4) as response:
             content = response.read().decode('utf-8', errors='ignore')
             for line in content.splitlines()[:3000]:
-                cleaned_line = line.strip()
-                if cleaned_line and len(cleaned_line) > 10:
-                    # แบ่งเป็นประโยคย่อยด้วยเว้นวรรค
-                    sub_sents = re.split(r'\s{2,}|\n+', cleaned_line)
-                    for ss in sub_sents:
+                cleaned = line.strip()
+                if cleaned and len(cleaned) > 10:
+                    for ss in re.split(r'\s{2,}|\n+', cleaned):
                         if len(ss.strip()) > 8:
-                            thai_sentences.append(ss.strip())
+                            thai_entries.append((ss.strip(), "Wongnai Corpus"))
     except Exception:
         pass
 
-    # 2.2 คลังประโยคภาษาไทยชีวิตประจำวัน อารมณ์ และบทความ
-    master_thai_sents = [
+    # 2.2 ดึง Tatoeba Thai Sentences
+    tatoeba_url = "https://raw.githubusercontent.com/tatoeba/tatoeba-datasets/master/tha/tha_sentences.tsv"
+    try:
+        req = urllib.request.Request(tatoeba_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=4) as response:
+            content = response.read().decode('utf-8', errors='ignore')
+            for line in content.splitlines()[:5000]:
+                parts = line.split('\t')
+                if len(parts) >= 3:
+                    thai_entries.append((parts[2].strip(), "Tatoeba Corpus"))
+    except Exception:
+        pass
+
+    # 2.3 คลังประโยคบทความและชีวิตประจำวัน
+    master_sents = [
         "ฉันยังคงรอเธออยู่ที่เดิมเสมอไม่ว่าเวลาจะผ่านไปนานแค่ไหน",
         "เขากำลังยืนรอรถเมล์อยู่ที่ป้ายหน้าโรงเรียนในตอนเย็น",
         "อย่าปล่อยให้ใครต้องรอนานเกินไปเพราะเวลามีค่าสำหรับทุกคน",
@@ -276,10 +287,13 @@ def build_wongnai_and_brown_index():
         "คำพูดที่อ่อนโยนสามารถสร้างกำลังใจให้ผู้คนได้อย่างมหาศาล",
         "ความฝันจะเป็นจริงได้หากเราลงมือทำอย่างตั้งใจและไม่ยอมแพ้ต่อความยากลำบาก"
     ]
-    all_thai = thai_sentences + master_thai_sents
+    for ms in master_sents:
+        thai_entries.append((ms, "Standard Thai Corpus"))
+
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
 
-    for sent_str in all_thai:
+    # 2.4 สร้าง Inverted Index ภาษาไทยด้วย Exact Token
+    for sent_str, source_name in thai_entries:
         tokens = word_tokenize(sent_str, engine="newmm", keep_whitespace=False)
         for i, token in enumerate(tokens):
             t_key = token.strip()
@@ -291,12 +305,12 @@ def build_wongnai_and_brown_index():
                         f"...{left}" if i > 0 and left else left,
                         token,
                         f"{right}..." if (i + 1 < len(tokens)) and right else right,
-                        "Wongnai & Standard Thai Corpus"
+                        f"Thai Combined Corpus ({source_name})"
                     ))
 
     return index_eng, index_thai
 
-INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_wongnai_and_brown_index()
+INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_combined_corpus_index()
 
 # --- ค้นหาจาก Corpus ภายนอกเท่านั้น (Exact Token Match) ---
 def search_external_corpus_only(target_word: str, max_results: int = 10):
@@ -802,10 +816,10 @@ with st.container(key="chart_box_pos"):
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 5 (ตารางส่องบริบทประโยคจริงจาก Corpus ภายนอกเท่านั้น) ====================
+# ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริงจาก Combined External Corpus) ====================
 with st.container(key="table_box_corpus_kwic"):
     st.markdown('<div class="card-title">📚 ตัวอย่างประโยคจริงจากการใช้งานทั่วไป (Corpus KWIC Concordance)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Wongnai & Standard Thai Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Wongnai, Tatoeba & Standard Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
     
     if st.session_state.wc_all:
         if st.session_state.wc_content:
