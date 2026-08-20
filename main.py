@@ -6,30 +6,27 @@ import io
 import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
-import re # เพิ่ม re สำหรับจัดการ split ประโยค
+import nltk
 from pythainlp import word_tokenize
-from pythainlp.tag import pos_tag
+from pythainlp.tag import pos_tag as thai_pos_tag
 from pythainlp.corpus import thai_stopwords
 from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
 
 # --- ตั้งค่าหน้าเว็บ ---
 st.set_page_config(
-    page_title="Thai Word Counter & Context Analyzer",
+    page_title="Thai & English Word Counter & Frequency Analyzer",
     page_icon="📝",
     layout="wide"
 )
 
-# --- CSS จัดการ Layout และสไตล์ (คงเดิม) ---
+# --- CSS จัดการ Layout + การ์ดสีขาว ---
 st.markdown("""
 <style>
-    /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         background: linear-gradient(135deg, #d8e2fd 0%, #e2d9f3 35%, #eddcf4 70%, #fcdbe8 100%) !important;
         background-attachment: fixed !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-
-    /* 2. กรอบสี่เหลี่ยมใหญ่ */
     .block-container, [data-testid="stMainBlockContainer"] {
         max-width: 1200px !important;
         width: 90% !important;
@@ -42,16 +39,12 @@ st.markdown("""
         border: 1.5px solid rgba(255, 255, 255, 0.8) !important;
         box-shadow: 0 16px 40px rgba(135, 120, 175, 0.12) !important;
     }
-
-    /* 3. ล้างพื้นหลังส่วน Layout อื่นๆ */
     header, footer, [data-testid="stAppViewBlockContainer"], [data-testid="stHorizontalBlock"] {
         background: transparent !important;
         background-color: transparent !important;
         box-shadow: none !important;
         border: none !important;
     }
-
-    /* 4. สไตล์การ์ดสีขาวนูน */
     .white-card {
         background-color: #ffffff;
         border-radius: 22px;
@@ -59,8 +52,6 @@ st.markdown("""
         box-shadow: 0 8px 24px rgba(135, 120, 175, 0.10);
         margin-bottom: 14px;
     }
-
-    /* 5. สไตล์ช่องกรอกข้อมูลและ Selectbox */
     .stTextArea textarea, div[data-baseweb="select"] > div {
         background: #fbfbfe !important;
         border: 1.5px solid #e2e5f0 !important;
@@ -68,9 +59,7 @@ st.markdown("""
         color: #2b2d42 !important;
         font-size: 0.95rem !important;
     }
-    .stTextArea textarea {
-        padding: 12px !important;
-    }
+    .stTextArea textarea { padding: 12px !important; }
     .stTextArea textarea:focus {
         border-color: #7b7393 !important;
         box-shadow: 0 0 0 2px rgba(123, 115, 147, 0.15) !important;
@@ -80,8 +69,6 @@ st.markdown("""
         font-size: 0.88rem !important;
         font-weight: 500 !important;
     }
-
-    /* 6. ปุ่มประมวลผล และปุ่มดาวน์โหลด */
     div.stButton {
         display: flex !important;
         justify-content: center !important;
@@ -105,8 +92,6 @@ st.markdown("""
         color: #ffffff !important;
         transform: translateY(-1px);
     }
-
-    /* 7. Typography */
     .card-title {
         font-size: 1.15rem;
         font-weight: 700;
@@ -130,15 +115,11 @@ st.markdown("""
         color: #232536;
         line-height: 1.1;
     }
-
-    /* 8. สไตล์ตาราง Dataframe */
     div[data-testid="stDataFrame"] {
         background-color: #ffffff !important;
         border: 1px solid #edf0f7 !important;
         border-radius: 12px !important;
     }
-
-    /* กล่อง Widget ฝังในสีขาว */
     .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, 
     .st-key-table_box_2, .st-key-chart_box_2, .st-key-chart_box_pos,
     .st-key-table_box_concordance {
@@ -150,7 +131,65 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- ฟังก์ชันสร้างภาพ 9:16 (คงเดิม) ---
+# --- ฟังก์ชันเตรียม NLTK Resources แบบโหลดเงียบและโหลดครั้งเดียว ---
+@st.cache_resource(show_spinner=False)
+def init_nltk():
+    needed = ['averaged_perceptron_tagger_eng', 'averaged_perceptron_tagger', 'universal_tagset']
+    for res in needed:
+        try:
+            nltk.data.find(res)
+        except LookupError:
+            try:
+                nltk.download(res, quiet=True)
+            except Exception:
+                pass
+init_nltk()
+
+# --- คลัง Stop Words ทั้งไทยและอังกฤษ ---
+thai_stop = set(thai_stopwords())
+english_stop = {
+    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've",
+    "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his',
+    'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself',
+    'they', 'them', 'refer', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom',
+    'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be',
+    'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a',
+    'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at',
+    'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before',
+    'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over',
+    'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why',
+    'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
+    'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can',
+    'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're',
+    've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn',
+    "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't",
+    'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't",
+    'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn',
+    "wouldn't", 'oh', 'baby', 'yeah', 'la', 'na', 'ah', 'ooh', 'whoa', 'hey', 'uh', 'um'
+}
+ALL_COMMON_WORDS = thai_stop.union(english_stop)
+
+# --- ดึงดัชนีความถี่คำมาตรฐาน ---
+@st.cache_data(show_spinner=False)
+def get_tnc_corpus_freq():
+    try:
+        freqs = tnc_word_freqs()
+        return dict(freqs) if freqs else {}
+    except Exception:
+        return {}
+
+TNC_FREQ_DICT = get_tnc_corpus_freq()
+
+def get_corpus_frequency(word: str) -> int:
+    score = TNC_FREQ_DICT.get(word, 0)
+    if word in ALL_COMMON_WORDS:
+        score += 100_000_000
+    return score
+
+def is_english_word(w: str) -> bool:
+    return any('a' <= c.lower() <= 'z' for c in w)
+
+# --- ฟังก์ชันสร้างภาพ 9:16 เพื่อแชร์ ---
 def generate_story_image(text_sample, total, unique, non_common):
     width, height = 1080, 1920
     img = Image.new("RGB", (width, height), "#ffffff")
@@ -163,7 +202,11 @@ def generate_story_image(text_sample, total, unique, non_common):
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    font_paths = ["tahoma.ttf", "leelawad.ttf", "Thonburi.ttc", "Angsana.ttc", "/System/Library/Fonts/Supplemental/Thonburi.ttc"]
+    font_paths = [
+        "tahoma.ttf", "leelawad.ttf", "Thonburi.ttc", "Angsana.ttc",
+        "/System/Library/Fonts/Supplemental/Thonburi.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ]
     font_main = None
     for p in font_paths:
         try:
@@ -173,9 +216,14 @@ def generate_story_image(text_sample, total, unique, non_common):
             font_num = ImageFont.truetype(p, 64)
             font_main = True
             break
-        except Exception: continue
+        except Exception:
+            continue
 
-    if not font_main: font_title = font_sub = font_body = font_num = ImageFont.load_default()
+    if not font_main:
+        font_title = ImageFont.load_default()
+        font_sub = font_title
+        font_body = font_title
+        font_num = font_title
 
     draw.rounded_rectangle([60, 100, 1020, 1820], radius=44, fill=(255, 255, 255, 140), outline=(255, 255, 255), width=4)
     draw.text((120, 160), "📝 Word Counter", fill="#232536", font=font_title)
@@ -183,6 +231,7 @@ def generate_story_image(text_sample, total, unique, non_common):
 
     draw.rounded_rectangle([110, 310, 970, 780], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 350), "ตัวอย่างข้อความ (Sample Text):", fill="#555770", font=font_sub)
+    
     lines = text_sample.strip().split("\n")[:7]
     sample_text_display = "\n".join([l[:38] + ("..." if len(l) > 38 else "") for l in lines])
     draw.text((150, 410), sample_text_display, fill="#2b2d42", font=font_body, spacing=14)
@@ -200,132 +249,205 @@ def generate_story_image(text_sample, total, unique, non_common):
     draw.text((150, 1510), f"{non_common:,}", fill="#232536", font=font_num)
 
     draw.text((380, 1720), "Created with Streamlit & PyThaiNLP", fill="#8a8ca3", font=font_body)
+
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
 
-# --- ฟังก์ชันหลักในการนับคำและวิเคราะห์ (คงเดิม) ---
-thai_stop = set(thai_stopwords())
-english_stop = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'refer', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't", 'oh', 'baby', 'yeah', 'la', 'na', 'ah', 'ooh', 'whoa', 'hey', 'uh', 'um'}
-ALL_COMMON_WORDS = thai_stop.union(english_stop)
-
-@st.cache_data
-def get_tnc_corpus_freq():
-    try:
-        freqs = tnc_word_freqs()
-        return dict(freqs) if freqs else {}
-    except Exception: return {}
-
-TNC_FREQ_DICT = get_tnc_corpus_freq()
-
-def get_corpus_frequency(word: str) -> int:
-    score = TNC_FREQ_DICT.get(word, 0)
-    if word in ALL_COMMON_WORDS: score += 100_000_000
-    return score
-
+# --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging ---
 def word_count(lyrics: str):
-    if not lyrics.strip(): return {}, {}, 0, {}
+    if not lyrics.strip():
+        return {}, {}, 0, {}, {}, []
     
-    # แยกคำรวมช่องว่างเพื่อใช้ทำ Concordance
+    # 1. Tokenize แบบเก็บช่องว่างเพื่อใช้ทำ Concordance / Context ในประโยค
     raw_tokens = word_tokenize(lyrics, keep_whitespace=True)
     
-    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-'}
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
+    lyrics_token_clean = []
     
-    # คำนวณความถี่ (Token ตัวพิมพ์เล็ก ไม่รวมสัญลักษณ์)
-    processed_tokens = []
     for w in raw_tokens:
-        clean_w = w.strip().lower()
-        if clean_w and clean_w not in sym and not clean_w.isdigit():
-            processed_tokens.append(clean_w)
+        clean_str = ""
+        for s in w:
+            if s not in sym and not s.isalpha() and not s.isdigit():
+                clean_str += s
+            elif s.isalpha():
+                clean_str += s.lower()
+                
+        clean_str = clean_str.strip()
+        if clean_str and clean_str not in sym and not clean_str.isdigit():
+            lyrics_token_clean.append(clean_str)
 
     wordcount_all = {}
     wordcount_content = {}
     non_common_total_count = 0
     
-    for w in processed_tokens:
+    for w in lyrics_token_clean:
         wordcount_all[w] = wordcount_all.get(w, 0) + 1
         if w not in ALL_COMMON_WORDS:
             wordcount_content[w] = wordcount_content.get(w, 0) + 1
             non_common_total_count += 1
 
-    sorted_all = dict(sorted(wordcount_all.items(), key=lambda item: (-item[1], get_corpus_frequency(item[0]))))
-    sorted_content = dict(sorted(wordcount_content.items(), key=lambda item: (-item[1], get_corpus_frequency(item[0]))))
+    sorted_all_list = sorted(
+        wordcount_all.items(),
+        key=lambda item: (-item[1], get_corpus_frequency(item[0]))
+    )
+    sorted_content_list = sorted(
+        wordcount_content.items(),
+        key=lambda item: (-item[1], get_corpus_frequency(item[0]))
+    )
 
-    # POS Tagging
-    list_of_words = list(sorted_all.keys())
-    postag = pos_tag(list_of_words, corpus="orchid_ud") if list_of_words else []
-    word_to_pos = {w: tag for w, tag in postag}
+    list_of_words = [k for k, v in sorted_all_list]
+    thai_words = [w for w in list_of_words if not is_english_word(w)]
+    eng_words = [w for w in list_of_words if is_english_word(w)]
+    
+    word_to_pos = {}
+    
+    if thai_words:
+        thai_postag = thai_pos_tag(thai_words, corpus="orchid_ud")
+        for w, tag in thai_postag:
+            word_to_pos[w] = tag
+            
+    if eng_words:
+        try:
+            eng_postag = nltk.pos_tag(eng_words, tagset="universal")
+            for w, tag in eng_postag:
+                word_to_pos[w] = tag
+        except Exception:
+            for w in eng_words:
+                word_to_pos[w] = "NOUN"
 
-    return sorted_all, sorted_content, non_common_total_count, word_to_pos, raw_tokens
+    pos_dict = {}
+    for w in list_of_words:
+        tag = word_to_pos.get(w, "X")
+        pos_dict[tag] = pos_dict.get(tag, 0) + 1
 
-# --- ฟังก์ชันใหม่: สร้างตาราง Concordance (บริบทคำ) ---
+    pos_dict_sorted = dict(sorted(pos_dict.items(), key=operator.itemgetter(1), reverse=True))
+
+    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted, raw_tokens
+
+# --- ฟังก์ชันดึงบริบทประโยคจริง (KWIC / Concordance) ---
 def get_concordance_table(target_word: str, raw_tokens: list, window: int = 5):
     if not target_word or not raw_tokens:
-        return pd.DataFrame(columns=['ลำดับ', 'บริบทซ้าย (Left Context)', 'คำเป้าหมาย (Key)', 'บริบทขวา (Right Context)'])
+        return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "ประโยคเต็ม"])
+    
+    target_clean = target_word.strip().lower()
+    target_indices = [
+        i for i, t in enumerate(raw_tokens)
+        if t.strip().lower() == target_clean or (is_english_word(target_clean) and t.strip().lower().startswith(target_clean))
+    ]
 
     data = []
-    sym_to_clear = {'\n', '\r', '\t'}
-    
-    # หาตำแหน่งของคำเป้าหมาย (ต้อง match แบบ case-insensitive และ trim space)
-    target_clean = target_word.strip().lower()
-    
-    # เก็บ index ที่ match
-    target_indices = [i for i, t in enumerate(raw_tokens) if t.strip().lower() == target_clean]
-
-    for idx, t_idx in enumerate(target_indices, 1):
-        # ดึงคำแวดล้อมตาม window size
+    for idx, t_idx in enumerate(target_indices, start=1):
         left_tokens = raw_tokens[max(0, t_idx - window) : t_idx]
         right_tokens = raw_tokens[t_idx + 1 : min(len(raw_tokens), t_idx + 1 + window)]
         
-        # คลีนตัวอักษรพิเศษ (\n) ออกเพื่อให้แสดงผลสวยงามในตาราง
         left_context = "".join([t.replace('\n', ' ') for t in left_tokens]).strip()
         right_context = "".join([t.replace('\n', ' ') for t in right_tokens]).strip()
-        actual_key = raw_tokens[t_idx].replace('\n', ' ') # เอาคำจริงที่ปรากฏใน text
-
+        actual_key = raw_tokens[t_idx].replace('\n', ' ').strip()
+        
+        full_sentence = f"{left_context} {actual_key} {right_context}".strip()
+        
         data.append({
-            'ลำดับ': idx,
-            'บริบทซ้าย (Left Context)': "..." + left_context if t_idx - window > 0 else left_context,
-            'คำเป้าหมาย (Key)': actual_key,
-            'บริบทขวา (Right Context)': right_context + "..." if t_idx + 1 + window < len(raw_tokens) else right_context
+            "ลำดับ": idx,
+            "บริบทซ้าย (Left Context)": f"...{left_context}" if t_idx - window > 0 else left_context,
+            "คำเป้าหมาย (Key)": actual_key,
+            "บริบทขวา (Right Context)": f"{right_context}..." if t_idx + 1 + window < len(raw_tokens) else right_context,
+            "ประโยคเต็ม": full_sentence
         })
 
     return pd.DataFrame(data)
 
-# --- จัดการ Session State (คงเดิม) ---
-if "wc_all" not in st.session_state: st.session_state.wc_all = None
-if "wc_content" not in st.session_state: st.session_state.wc_content = None
-if "history_list" not in st.session_state: st.session_state.history_list = []
-if "raw_tokens" not in st.session_state: st.session_state.raw_tokens = [] # เก็บ tokens รวมช่องว่าง
+# --- จัดการ Session State ---
+if "wc_all" not in st.session_state:
+    st.session_state.wc_all = None
 
-# ==================== แถวที่ 1 (Input) ====================
+if "wc_content" not in st.session_state:
+    st.session_state.wc_content = None
+
+if "non_common_total" not in st.session_state:
+    st.session_state.non_common_total = 0
+
+if "word_to_pos" not in st.session_state:
+    st.session_state.word_to_pos = {}
+
+if "pos_dict_sorted" not in st.session_state:
+    st.session_state.pos_dict_sorted = None
+
+if "raw_tokens" not in st.session_state:
+    st.session_state.raw_tokens = []
+
+if "history_list" not in st.session_state:
+    st.session_state.history_list = []
+
+if "current_text" not in st.session_state:
+    st.session_state.current_text = ""
+
+def apply_history():
+    selected = st.session_state.selected_history
+    if selected and selected != "-- เลือกดูประวัติข้อความเก่า --":
+        st.session_state.current_text = selected
+        all_w, content_w, nc, w_pos, p_dict, r_tokens = word_count(selected)
+        st.session_state.wc_all = all_w
+        st.session_state.wc_content = content_w
+        st.session_state.non_common_total = nc
+        st.session_state.word_to_pos = w_pos
+        st.session_state.pos_dict_sorted = p_dict
+        st.session_state.raw_tokens = r_tokens
+
+# ==================== แถวที่ 1 (Input Card + 3 Metric Cards) ====================
 r1_left, r1_right = st.columns([1.3, 1], gap="medium")
 
 with r1_left:
     with st.container(key="input_box"):
-        st.markdown('<div class="card-title">📝 Thai Word Counter & Context Analyzer</div>', unsafe_allow_html=True)
-        st.markdown('<div class="card-subtitle">วางเนื้อเพลงหรือข้อความภาษาไทยเพื่อวิเคราะห์แจกแจงความถี่และดูบริบทของคำ</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">📝 Thai & English Word Counter</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-subtitle">วางเนื้อเพลงหรือข้อความภาษาไทยหรืออังกฤษเพื่อวิเคราะห์และนับความถี่ของคำ</div>', unsafe_allow_html=True)
         
-        text_input = st.text_area(label="กรอกข้อความของคุณที่นี่:", value="", placeholder="วางเนื้อหาที่ต้องการวิเคราะห์...", height=200)
+        if st.session_state.history_list:
+            history_options = ["-- เลือกดูประวัติข้อความเก่า --"] + st.session_state.history_list
+            st.selectbox(
+                label="📜 ประวัติข้อความที่เคยใส่:",
+                options=history_options,
+                format_func=lambda x: (x[:45] + "...") if len(x) > 45 else x,
+                key="selected_history",
+                on_change=apply_history
+            )
         
-        # จัดปุ่มกึ่งกลาง
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        _, btn_center, _ = st.columns([1, 1.2, 1])
+        text_input = st.text_area(
+            label="กรอกหรือวางข้อความที่ต้องการนับคำที่นี่:",
+            value=st.session_state.current_text,
+            placeholder="วางเนื้อหาหรือข้อความยาว ๆ ลงในช่องนี้...",
+            height=180
+        )
+        
+        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+        _, btn_center, _ = st.columns([1, 1.1, 1])
         with btn_center:
             btn_clicked = st.button("ประมวลผล", use_container_width=True)
             
         if btn_clicked:
+            st.session_state.current_text = text_input
             if text_input.strip():
-                all_w, content_w, nc, w_pos, raw_t = word_count(text_input)
+                if text_input in st.session_state.history_list:
+                    st.session_state.history_list.remove(text_input)
+                st.session_state.history_list.insert(0, text_input)
+                
+                all_w, content_w, nc, w_pos, p_dict, r_tokens = word_count(text_input)
                 st.session_state.wc_all = all_w
                 st.session_state.wc_content = content_w
                 st.session_state.non_common_total = nc
                 st.session_state.word_to_pos = w_pos
-                st.session_state.raw_tokens = raw_t # เก็บไว้ทำ concordance
-                st.session_state.current_text = text_input # เก็บไว้ทำรูป
+                st.session_state.pos_dict_sorted = p_dict
+                st.session_state.raw_tokens = r_tokens
                 st.rerun()
+            else:
+                st.session_state.wc_all = None
+                st.session_state.wc_content = None
+                st.session_state.non_common_total = 0
+                st.session_state.word_to_pos = {}
+                st.session_state.pos_dict_sorted = None
+                st.session_state.raw_tokens = []
 
 with r1_right:
-    # (ส่วน Metric - คงเดิม)
     total_tokens = sum(st.session_state.wc_all.values()) if st.session_state.wc_all else 0
     unique_tokens = len(st.session_state.wc_all) if st.session_state.wc_all else 0
     non_common_words = st.session_state.non_common_total if st.session_state.wc_all else 0
@@ -346,88 +468,269 @@ with r1_right:
     """, unsafe_allow_html=True)
     
     if st.session_state.wc_all:
-        img_bytes = generate_story_image(st.session_state.current_text, total_tokens, unique_tokens, non_common_words)
-        st.download_button(label="📸 Save Image", data=img_bytes, file_name="word_summary.png", mime="image/png", use_container_width=True)
-
-st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
-
-# ==================== แถวที่ 2 (กราฟและตารางความถี่ - คงเดิม) ====================
-if st.session_state.wc_all:
-    # (โค้ดส่วนแสดงตารางและกราฟ Top 10 - ไม่เปลี่ยนแปลง)
-    # ... (ตัดออกเพื่อความกระชับ แต่ในไฟล์จริงต้องมีครบ) ...
-    # สรุปคือ ส่วนนี้เหมือนเดิมทุกประการครับ
-    
-    # สมมติว่ามีโค้ดส่วนตาราง/กราฟอยู่ตรงนี้
-    r2_left, r2_right = st.columns([1, 1.3], gap="medium")
-    with r2_left:
-        with st.container(key="table_box_1"):
-            st.markdown('<div class="card-title">📊 ตารางแจกแจงความถี่ (คำทั้งหมด)</div>', unsafe_allow_html=True)
-            data_all = []
-            for word, count in st.session_state.wc_all.items():
-                pos = st.session_state.word_to_pos.get(word, "-")
-                data_all.append({"WORD": word, "POS TAG": pos, "COUNT": count})
-            df_all = pd.DataFrame(data_all)
-            st.dataframe(df_all, hide_index=True, use_container_width=True, height=300)
-
-    with r2_right:
-        with st.container(key="chart_box_1"):
-            st.markdown('<div class="card-title">📈 คำที่พบมากที่สุด (Top 10 - รวมทุกคำ)</div>', unsafe_allow_html=True)
-            if not df_all.empty:
-                top_10_all = df_all.head(10)
-                chart_all = alt.Chart(top_10_all).mark_bar(color="#f59e0b", cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                    x=alt.X("WORD", sort=None, axis=alt.Axis(labelAngle=0, labelColor="#475569")),
-                    y=alt.Y("COUNT", axis=alt.Axis(labelColor="#475569")),
-                    tooltip=["WORD", "COUNT"]
-                ).properties(height=280).configure_view(strokeWidth=0)
-                st.altair_chart(chart_all, use_container_width=True)
-
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-
-# ==================== แถวที่ 3 (Concordance - ส่วนที่ทำใหม่) ====================
-if st.session_state.wc_all:
-    with st.container(key="table_box_concordance"):
-        st.markdown('<div class="card-title">🔍 ดูบริบทของคำในประโยค (Word in Context)</div>', unsafe_allow_html=True)
-        st.markdown('<div class="card-subtitle">เลือกคำที่สนใจเพื่อดูประโยคจริงที่คำนั้นปรากฏ (แสดงคำแวดล้อม ซ้าย-ขวา ข้างละ 5 คำ)</div>', unsafe_allow_html=True)
+        img_bytes = generate_story_image(
+            text_sample=st.session_state.current_text,
+            total=total_tokens,
+            unique=unique_tokens,
+            non_common=non_common_words
+        )
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+        share_text_val = f"📊 สรุปผลการนับคำและวิเคราะห์ข้อความ:\\n- คำทั้งหมด: {total_tokens:,} คำ\\n- คำที่ไม่ซ้ำกัน: {unique_tokens:,} คำ\\n- คำเฉพาะ: {non_common_words:,} คำ"
         
-        # สร้างรายชื่อคำให้เลือก (เอาเฉพาะ Content words มาแสดงก่อนเพื่อความหมายที่ดี)
-        if st.session_state.wc_content:
-            word_options = list(st.session_state.wc_content.keys())
-        else:
-            word_options = list(st.session_state.wc_all.keys())
+        button_group_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 4px;
+                width: 100%;
+                box-sizing: border-box;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }}
+            .dl-btn {{
+                flex: 1;
+                background: #34324b;
+                color: #ffffff;
+                border: none;
+                border-radius: 20px;
+                height: 38px;
+                padding: 0 16px;
+                font-size: 0.92rem;
+                font-weight: 500;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                box-shadow: 0 4px 12px rgba(52, 50, 75, 0.25);
+                transition: all 0.2s ease;
+                text-decoration: none;
+                box-sizing: border-box;
+            }}
+            .dl-btn:hover {{
+                background: #232136;
+                transform: translateY(-1px);
+            }}
+            .circle-share-btn {{
+                background: #34324b;
+                color: #ffffff;
+                border: none;
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(52, 50, 75, 0.25);
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }}
+            .circle-share-btn:hover {{
+                background: #232136;
+                transform: translateY(-1px);
+            }}
+            .circle-share-btn svg {{
+                width: 17px;
+                height: 17px;
+                fill: currentColor;
+            }}
+        </style>
+        </head>
+        <body>
+            <a class="dl-btn" href="data:image/png;base64,{img_b64}" download="word_count_summary.png">
+                📸 Save Image
+            </a>
+            <button class="circle-share-btn" onclick="triggerNativeShare()" title="แชร์">
+                <svg viewBox="0 0 24 24">
+                    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
+                </svg>
+            </button>
+            <script>
+            async function triggerNativeShare() {{
+                const title = "Word Counter Summary";
+                const text = "{share_text_val}";
+                const b64Data = "{img_b64}";
+                
+                try {{
+                    const byteCharacters = atob(b64Data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {{
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }}
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const file = new File([byteArray], "word_count_summary.png", {{ type: "image/png" }});
+                    
+                    if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+                        await navigator.share({{
+                            title: title,
+                            text: text,
+                            files: [file]
+                        }});
+                    }} else if (navigator.share) {{
+                        await navigator.share({{
+                            title: title,
+                            text: text
+                        }});
+                    }} else {{
+                        await navigator.clipboard.writeText(text);
+                        alert("คัดลอกข้อความสรุปผลลง Clipboard เรียบร้อยแล้ว!");
+                    }}
+                }} catch (err) {{
+                    console.log("Share failed:", err);
+                }}
+            }}
+            </script>
+        </body>
+        </html>
+        """
+        components.html(button_group_html, height=44)
 
-        # Dropdown เลือกคำ
-        selected_word = st.selectbox(
-            "เลือกคำที่ต้องการดูบริบท:",
-            options=word_options,
-            index=0 if word_options else None,
-            label_visibility="collapsed"
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 2 (คำทั้งหมด All Words) ====================
+r2_left, r2_right = st.columns([1, 1.3], gap="medium")
+
+if st.session_state.wc_all:
+    data_all = []
+    for idx, (word, count) in enumerate(st.session_state.wc_all.items(), start=1):
+        pos = st.session_state.word_to_pos.get(word, "-")
+        data_all.append({"ลำดับ": idx, "WORD": str(word), "POS TAG": str(pos), "COUNT": int(count)})
+    df_all = pd.DataFrame(data_all)
+else:
+    df_all = pd.DataFrame(columns=["ลำดับ", "WORD", "POS TAG", "COUNT"])
+
+with r2_left:
+    with st.container(key="table_box_1"):
+        st.markdown('<div class="card-title">📊 ตารางแจกแจงความถี่ (คำทั้งหมด)</div>', unsafe_allow_html=True)
+        st.dataframe(df_all, hide_index=True, use_container_width=True, height=280)
+
+with r2_right:
+    with st.container(key="chart_box_1"):
+        st.markdown('<div class="card-title">📈 คำที่พบมากที่สุด (Top 15 - รวมทุกคำ)</div>', unsafe_allow_html=True)
+        if not df_all.empty:
+            top_15_all = df_all.head(15).copy()
+            bars = alt.Chart(top_15_all).mark_bar(
+                color="#f59e0b", cornerRadiusTopLeft=4, cornerRadiusTopRight=4, width=14
+            ).encode(
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
+            )
+            text_labels = alt.Chart(top_15_all).mark_text(
+                align='center', baseline='bottom', dy=-4, color='#475569', fontSize=11, fontWeight=600
+            ).encode(
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
+                y=alt.Y("COUNT:Q"), text=alt.Text("COUNT:Q")
+            )
+            st.altair_chart((bars + text_labels).properties(height=260, background="#ffffff").configure_view(strokeWidth=0), use_container_width=True)
+        else:
+            st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
+
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 3 (ไม่รวม Stop Words) ====================
+r3_left, r3_right = st.columns([1, 1.3], gap="medium")
+
+if st.session_state.wc_content:
+    data_content = []
+    for idx, (word, count) in enumerate(st.session_state.wc_content.items(), start=1):
+        pos = st.session_state.word_to_pos.get(word, "-")
+        data_content.append({"ลำดับ": idx, "WORD": str(word), "POS TAG": str(pos), "COUNT": int(count)})
+    df_content = pd.DataFrame(data_content)
+else:
+    df_content = pd.DataFrame(columns=["ลำดับ", "WORD", "POS TAG", "COUNT"])
+
+with r3_left:
+    with st.container(key="table_box_2"):
+        st.markdown('<div class="card-title">🔍 ตารางแจกแจงความถี่ (ไม่รวม Stop Words)</div>', unsafe_allow_html=True)
+        st.dataframe(df_content, hide_index=True, use_container_width=True, height=280)
+
+with r3_right:
+    with st.container(key="chart_box_2"):
+        st.markdown('<div class="card-title">✨ คำสำคัญที่พบมากที่สุด (Top 15 - ไม่รวม Stop Words)</div>', unsafe_allow_html=True)
+        if not df_content.empty:
+            top_15_content = df_content.head(15).copy()
+            bars_content = alt.Chart(top_15_content).mark_bar(
+                color="#6366f1", cornerRadiusTopLeft=4, cornerRadiusTopRight=4, width=14
+            ).encode(
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
+            )
+            text_labels_content = alt.Chart(top_15_content).mark_text(
+                align='center', baseline='bottom', dy=-4, color='#475569', fontSize=11, fontWeight=600
+            ).encode(
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
+                y=alt.Y("COUNT:Q"), text=alt.Text("COUNT:Q")
+            )
+            st.altair_chart((bars_content + text_labels_content).properties(height=260, background="#ffffff").configure_view(strokeWidth=0), use_container_width=True)
+        else:
+            st.markdown("<p style='color: #8a8ca3; height: 260px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
+
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 4 (กราฟ POS Tag Frequency) ====================
+if st.session_state.pos_dict_sorted:
+    df_pos_summary = pd.DataFrame(
+        [{"POS TAG": str(k), "COUNT": int(v)} for k, v in st.session_state.pos_dict_sorted.items()]
+    )
+else:
+    df_pos_summary = pd.DataFrame(columns=["POS TAG", "COUNT"])
+
+with st.container(key="chart_box_pos"):
+    st.markdown('<div class="card-title">📊 สัดส่วนชนิดของคำที่พบ (POS Tag Frequency)</div>', unsafe_allow_html=True)
+    if not df_pos_summary.empty:
+        bars_pos = alt.Chart(df_pos_summary).mark_bar(
+            color="#ec4899", cornerRadiusTopLeft=4, cornerRadiusTopRight=4, width=22
+        ).encode(
+            x=alt.X("POS TAG:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=0, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+            y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
+        )
+        text_labels_pos = alt.Chart(df_pos_summary).mark_text(
+            align='center', baseline='bottom', dy=-4, color='#475569', fontSize=11, fontWeight=600
+        ).encode(
+            x=alt.X("POS TAG:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
+            y=alt.Y("COUNT:Q"), text=alt.Text("COUNT:Q")
+        )
+        st.altair_chart((bars_pos + text_labels_pos).properties(height=260, background="#ffffff").configure_view(strokeWidth=0), use_container_width=True)
+    else:
+        st.markdown("<p style='color: #8a8ca3; height: 160px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
+
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 5 (ตารางส่องบริบทประโยคจริง KWIC / Concordance) ====================
+with st.container(key="table_box_concordance"):
+    st.markdown('<div class="card-title">🔍 ดูบริบทของคำในประโยคจริง (Word in Context / Concordance)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำจากข้อความ เพื่อดูประโยคและคำแวดล้อมจริงในตำแหน่งต่างๆ ที่คำนั้นปรากฏ</div>', unsafe_allow_html=True)
+    
+    if st.session_state.wc_all:
+        if st.session_state.wc_content:
+            words_available = list(st.session_state.wc_content.keys())
+        else:
+            words_available = list(st.session_state.wc_all.keys())
+            
+        selected_target_word = st.selectbox(
+            label="เลือกคำที่ต้องการดูบริบทในประโยค:",
+            options=words_available,
+            format_func=lambda w: f"{w}  (พบในข้อความ {st.session_state.wc_all.get(w, 0)} ครั้ง)"
         )
         
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-
-        if selected_word:
-            # ดึงตาราง Concordance
-            df_concordance = get_concordance_table(selected_word, st.session_state.raw_tokens, window=5)
-            
-            if not df_concordance.empty:
-                # แสดงสถิติการพบ
-                st.caption(f"พบคำว่า '{selected_word}' ทั้งหมด {len(df_concordance)} ครั้ง ในบริบทดังนี้:")
-                
-                # จัดรูปแบบตารางให้น่าอ่าน (Key อยู่ตรงกลาง)
-                # ใช้ st.dataframe แบบกำหนดคอลัมน์
-                st.dataframe(
-                    df_concordance,
-                    column_config={
-                        "ลำดับ": st.column_config.NumberColumn(width="small"),
-                        "บริบทซ้าย (Left Context)": st.column_config.TextColumn(width="large", help="คำก่อนหน้า"),
-                        "คำเป้าหมาย (Key)": st.column_config.TextColumn(width="medium", help="คำที่เลือก"),
-                        "บริบทขวา (Right Context)": st.column_config.TextColumn(width="large", help="คำถัดไป"),
-                    },
-                    hide_index=True,
-                    use_container_width=True,
-                    height=300 # กำหนดความสูง固定
-                )
-            else:
-                st.info(f"ไม่พบคำว่า '{selected_word}' ในบริบทที่ชัดเจน (อาจเป็นสัญลักษณ์)")
+        df_concordance = get_concordance_table(selected_target_word, st.session_state.raw_tokens, window=5)
+        
+        if not df_concordance.empty:
+            st.dataframe(
+                df_concordance[["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)"]],
+                hide_index=True,
+                use_container_width=True,
+                height=280
+            )
         else:
-            st.info("กรุณาประมวลผลข้อความเพื่อเลือกคำ")
+            st.info(f"ไม่พบบริบทของคำว่า '{selected_target_word}' ในข้อความ")
+    else:
+        st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
