@@ -1,8 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import operator
 import io
-import urllib.parse
+import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
 from pythainlp import word_tokenize
@@ -17,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว + ปุ่มกึ่งกลาง + ไอคอนแชร์ SVG ---
+# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว + ปุ่มกึ่งกลาง ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
@@ -79,14 +80,14 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล, ปุ่มดาวน์โหลด และปุ่มแชร์ */
-    div.stButton, div.stDownloadButton, div[data-testid="stPopover"] {
+    /* 6. ปุ่มประมวลผล และปุ่มดาวน์โหลด */
+    div.stButton, div.stDownloadButton {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
         width: 100% !important;
     }
-    div.stButton > button, div.stDownloadButton > button, div[data-testid="stPopover"] > button {
+    div.stButton > button, div.stDownloadButton > button {
         background: #34324b !important;
         color: #ffffff !important;
         border-radius: 20px !important;
@@ -98,27 +99,10 @@ st.markdown("""
         transition: all 0.2s ease !important;
         width: 100% !important;
     }
-    div.stButton > button:hover, div.stDownloadButton > button:hover, div[data-testid="stPopover"] > button:hover {
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
         background: #232136 !important;
         color: #ffffff !important;
         transform: translateY(-1px);
-    }
-
-    /* 6.1 แทรกไอคอน Share SVG หน้าปุ่มแชร์ */
-    div[data-testid="stPopover"] > button {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
-    }
-    div[data-testid="stPopover"] > button::before {
-        content: "" !important;
-        display: inline-block !important;
-        width: 16px !important;
-        height: 16px !important;
-        background-color: #ffffff !important;
-        -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>') no-repeat center / contain !important;
-        mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>') no-repeat center / contain !important;
     }
 
     /* 7. Typography */
@@ -433,17 +417,18 @@ with r1_right:
     </div>
     """, unsafe_allow_html=True)
     
-    # ส่วนปุ่มดาวน์โหลดรูปภาพ และแชร์ต่อไปยัง Social Media
+    # ส่วนปุ่มดาวน์โหลดรูปภาพ และปุ่มแชร์ทรงกลม (Native Web Share UI)
     if st.session_state.wc_all:
-        col_dl, col_share = st.columns(2, gap="small")
+        col_dl, col_share = st.columns([1.5, 0.45], gap="small")
+        
+        img_bytes = generate_story_image(
+            text_sample=st.session_state.current_text,
+            total=total_tokens,
+            unique=unique_tokens,
+            non_common=non_common_words
+        )
         
         with col_dl:
-            img_bytes = generate_story_image(
-                text_sample=st.session_state.current_text,
-                total=total_tokens,
-                unique=unique_tokens,
-                non_common=non_common_words
-            )
             st.download_button(
                 label="📸 บันทึกภาพ (9:16)",
                 data=img_bytes,
@@ -453,14 +438,86 @@ with r1_right:
             )
             
         with col_share:
-            share_text = f"📊 สรุปผลการนับคำและวิเคราะห์ข้อความ:\n- คำทั้งหมด: {total_tokens:,} คำ\n- คำที่ไม่ซ้ำกัน: {unique_tokens:,} คำ\n- คำเฉพาะ/ไม่ใช่คำทั่วไป: {non_common_words:,} คำ"
-            encoded_text = urllib.parse.quote(share_text)
+            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            share_text_val = f"📊 สรุปผลการนับคำและวิเคราะห์ข้อความ:\\n- คำทั้งหมด: {total_tokens:,} คำ\\n- คำที่ไม่ซ้ำกัน: {unique_tokens:,} คำ\\n- คำเฉพาะ: {non_common_words:,} คำ"
             
-            with st.popover("แชร์ผลลัพธ์", use_container_width=True):
-                st.markdown("<p style='font-size: 0.88rem; font-weight: 600; color: #484a63; margin-bottom: 8px;'>เลือกช่องทางแชร์:</p>", unsafe_allow_html=True)
-                st.link_button("📱 แชร์ไปยัง LINE", f"https://line.me/R/msg/text/?{encoded_text}", use_container_width=True)
-                st.link_button("🐦 แชร์ไปยัง X (Twitter)", f"https://twitter.com/intent/tweet?text={encoded_text}", use_container_width=True)
-                st.link_button("📘 แชร์ไปยัง Facebook", f"https://www.facebook.com/sharer/sharer.php?quote={encoded_text}", use_container_width=True)
+            # Component ปุ่มแชร์ทรงกลม เรียก Native Share Sheet ของอุปกรณ์
+            share_button_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <style>
+                body {{ margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: transparent; }}
+                .circle-share-btn {{
+                    background: #34324b;
+                    color: #ffffff;
+                    border: none;
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(52, 50, 75, 0.25);
+                    transition: all 0.2s ease;
+                }}
+                .circle-share-btn:hover {{
+                    background: #232136;
+                    transform: translateY(-1px);
+                }}
+                .circle-share-btn svg {{
+                    width: 18px;
+                    height: 18px;
+                    fill: currentColor;
+                }}
+            </style>
+            </head>
+            <body>
+                <button class="circle-share-btn" onclick="triggerNativeShare()" title="แชร์">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
+                    </svg>
+                </button>
+                <script>
+                async function triggerNativeShare() {{
+                    const title = "Word Counter Summary";
+                    const text = "{share_text_val}";
+                    const b64Data = "{img_b64}";
+                    
+                    try {{
+                        const byteCharacters = atob(b64Data);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {{
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }}
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const file = new File([byteArray], "word_count_summary.png", {{ type: "image/png" }});
+                        
+                        if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+                            await navigator.share({{
+                                title: title,
+                                text: text,
+                                files: [file]
+                            }});
+                        }} else if (navigator.share) {{
+                            await navigator.share({{
+                                title: title,
+                                text: text
+                            }});
+                        }} else {{
+                            await navigator.clipboard.writeText(text);
+                            alert("คัดลอกข้อความสรุปผลลง Clipboard เรียบร้อยแล้ว!");
+                        }}
+                    }} catch (err) {{
+                        console.log("Share failed:", err);
+                    }}
+                }}
+                </script>
+            </body>
+            </html>
+            """
+            components.html(share_button_html, height=44)
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
