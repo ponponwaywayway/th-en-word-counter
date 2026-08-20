@@ -12,7 +12,7 @@ from pythainlp.tag import pos_tag as thai_pos_tag
 from pythainlp.corpus import thai_stopwords
 from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
 
-# ตรวจสอบและดาวน์โหลด resource ของ nltk สำหรับ pos tagging ภาษาอังกฤษ
+# ตรวจสอบและดาวน์โหลด resource ของ nltk
 try:
     nltk.data.find('taggers/averaged_perceptron_tagger_eng')
 except LookupError:
@@ -272,16 +272,15 @@ def get_corpus_frequency(word: str) -> int:
     return score
 
 def is_english_word(w: str) -> bool:
-    """ตรวจสอบว่าเป็นคำภาษาอังกฤษหรือไม่"""
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging (Thai & English) ---
+# --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0, {}, {}
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
-    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&'}
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
     lyrics_token_clean = []
     
     for w in lyrics_token:
@@ -292,6 +291,7 @@ def word_count(lyrics: str):
             elif s.isalpha():
                 clean_str += s.lower()
                 
+        clean_str = clean_str.strip()
         if clean_str and clean_str not in sym and not clean_str.isdigit():
             lyrics_token_clean.append(clean_str)
 
@@ -314,31 +314,26 @@ def word_count(lyrics: str):
         key=lambda item: (-item[1], get_corpus_frequency(item[0]))
     )
 
-    # --- วิเคราะห์ POS Tagging แยกคำไทยและอังกฤษ ---
     list_of_words = [k for k, v in sorted_all_list]
     thai_words = [w for w in list_of_words if not is_english_word(w)]
     eng_words = [w for w in list_of_words if is_english_word(w)]
     
     word_to_pos = {}
     
-    # 1. Thai POS Tagging (orchid_ud)
     if thai_words:
         thai_postag = thai_pos_tag(thai_words, corpus="orchid_ud")
         for w, tag in thai_postag:
             word_to_pos[w] = tag
             
-    # 2. English POS Tagging (NLTK Universal POS Tags)
     if eng_words:
         try:
             eng_postag = nltk.pos_tag(eng_words, tagset="universal")
             for w, tag in eng_postag:
                 word_to_pos[w] = tag
         except Exception:
-            # Fallback หาก NLTK ไม่พร้อมใช้งาน
             for w in eng_words:
                 word_to_pos[w] = "NOUN"
 
-    # รวบรวมความถี่ของ POS Tag ทั้งหมด
     pos_dict = {}
     for w in list_of_words:
         tag = word_to_pos.get(w, "X")
@@ -453,7 +448,7 @@ with r1_right:
     </div>
     """, unsafe_allow_html=True)
     
-    # ส่วนปุ่มบันทึกภาพ (ยาว) + ปุ่มแชร์ทรงกลมชิดขวาสุด (เว้นระยะ 4px)
+    # ส่วนปุ่มบันทึกภาพ + ปุ่มแชร์ทรงกลม
     if st.session_state.wc_all:
         img_bytes = generate_story_image(
             text_sample=st.session_state.current_text,
@@ -589,7 +584,7 @@ if st.session_state.wc_all:
     data_all = []
     for idx, (word, count) in enumerate(st.session_state.wc_all.items(), start=1):
         pos = st.session_state.word_to_pos.get(word, "-")
-        data_all.append({"ลำดับ": idx, "WORD": word, "POS TAG": pos, "COUNT": count})
+        data_all.append({"ลำดับ": idx, "WORD": str(word), "POS TAG": str(pos), "COUNT": int(count)})
     df_all = pd.DataFrame(data_all)
 else:
     df_all = pd.DataFrame(columns=["ลำดับ", "WORD", "POS TAG", "COUNT"])
@@ -603,7 +598,7 @@ with r2_right:
     with st.container(key="chart_box_1"):
         st.markdown('<div class="card-title">📈 คำที่พบมากที่สุด (Top 15 - รวมทุกคำ)</div>', unsafe_allow_html=True)
         if not df_all.empty:
-            top_15_all = df_all.head(15)
+            top_15_all = df_all.head(15).copy()
             
             bars = alt.Chart(top_15_all).mark_bar(
                 color="#f59e0b",
@@ -611,7 +606,7 @@ with r2_right:
                 cornerRadiusTopRight=4,
                 width=14
             ).encode(
-                x=alt.X("WORD:N", sort=top_15_all["WORD"].tolist(), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
                 y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
@@ -623,7 +618,7 @@ with r2_right:
                 fontSize=11,
                 fontWeight=600
             ).encode(
-                x=alt.X("WORD:N", sort=top_15_all["WORD"].tolist()),
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
                 y=alt.Y("COUNT:Q"),
                 text=alt.Text("COUNT:Q")
             )
@@ -642,7 +637,7 @@ if st.session_state.wc_content:
     data_content = []
     for idx, (word, count) in enumerate(st.session_state.wc_content.items(), start=1):
         pos = st.session_state.word_to_pos.get(word, "-")
-        data_content.append({"ลำดับ": idx, "WORD": word, "POS TAG": pos, "COUNT": count})
+        data_content.append({"ลำดับ": idx, "WORD": str(word), "POS TAG": str(pos), "COUNT": int(count)})
     df_content = pd.DataFrame(data_content)
 else:
     df_content = pd.DataFrame(columns=["ลำดับ", "WORD", "POS TAG", "COUNT"])
@@ -656,7 +651,7 @@ with r3_right:
     with st.container(key="chart_box_2"):
         st.markdown('<div class="card-title">✨ คำสำคัญที่พบมากที่สุด (Top 15 - ไม่รวม Stop Words)</div>', unsafe_allow_html=True)
         if not df_content.empty:
-            top_15_content = df_content.head(15)
+            top_15_content = df_content.head(15).copy()
             
             bars_content = alt.Chart(top_15_content).mark_bar(
                 color="#6366f1",
@@ -664,7 +659,7 @@ with r3_right:
                 cornerRadiusTopRight=4,
                 width=14
             ).encode(
-                x=alt.X("WORD:N", sort=top_15_content["WORD"].tolist(), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=90, labelColor="#475569", title=None, tickColor="#cbd5e1")),
                 y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
             )
             
@@ -676,7 +671,7 @@ with r3_right:
                 fontSize=11,
                 fontWeight=600
             ).encode(
-                x=alt.X("WORD:N", sort=top_15_content["WORD"].tolist()),
+                x=alt.X("WORD:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
                 y=alt.Y("COUNT:Q"),
                 text=alt.Text("COUNT:Q")
             )
@@ -690,7 +685,9 @@ st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # ==================== แถวที่ 4 (ชุดที่ 3: กราฟ POS Tag Frequency แบบเต็มแถว) ====================
 if st.session_state.pos_dict_sorted:
-    df_pos_summary = pd.DataFrame(list(st.session_state.pos_dict_sorted.items()), columns=["POS TAG", "COUNT"])
+    df_pos_summary = pd.DataFrame(
+        [{"POS TAG": str(k), "COUNT": int(v)} for k, v in st.session_state.pos_dict_sorted.items()]
+    )
 else:
     df_pos_summary = pd.DataFrame(columns=["POS TAG", "COUNT"])
 
@@ -703,7 +700,7 @@ with st.container(key="chart_box_pos"):
             cornerRadiusTopRight=4,
             width=22
         ).encode(
-            x=alt.X("POS TAG:N", sort=df_pos_summary["POS TAG"].tolist(), axis=alt.Axis(labelAngle=0, labelColor="#475569", title=None, tickColor="#cbd5e1")),
+            x=alt.X("POS TAG:N", sort=alt.EncodingSortField(field="COUNT", order="descending"), axis=alt.Axis(labelAngle=0, labelColor="#475569", title=None, tickColor="#cbd5e1")),
             y=alt.Y("COUNT:Q", axis=alt.Axis(labelColor="#475569", title=None, gridColor="#f1f5f9", tickColor="#cbd5e1"))
         )
         
@@ -715,7 +712,7 @@ with st.container(key="chart_box_pos"):
             fontSize=11,
             fontWeight=600
         ).encode(
-            x=alt.X("POS TAG:N", sort=df_pos_summary["POS TAG"].tolist()),
+            x=alt.X("POS TAG:N", sort=alt.EncodingSortField(field="COUNT", order="descending")),
             y=alt.Y("COUNT:Q"),
             text=alt.Text("COUNT:Q")
         )
