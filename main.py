@@ -6,14 +6,26 @@ import io
 import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
+import nltk
 from pythainlp import word_tokenize
-from pythainlp.tag import pos_tag
+from pythainlp.tag import pos_tag as thai_pos_tag
 from pythainlp.corpus import thai_stopwords
 from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
 
+# ตรวจสอบและดาวน์โหลด resource ของ nltk สำหรับ pos tagging ภาษาอังกฤษ
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger_eng')
+except LookupError:
+    try:
+        nltk.download('averaged_perceptron_tagger_eng', quiet=True)
+        nltk.download('averaged_perceptron_tagger', quiet=True)
+        nltk.download('universal_tagset', quiet=True)
+    except Exception:
+        pass
+
 # --- ตั้งค่าหน้าเว็บ ---
 st.set_page_config(
-    page_title="Thai Word Counter & Frequency Analyzer",
+    page_title="Thai & English Word Counter & Frequency Analyzer",
     page_icon="📝",
     layout="wide"
 )
@@ -259,7 +271,11 @@ def get_corpus_frequency(word: str) -> int:
         score += 100_000_000
     return score
 
-# --- ฟังก์ชันตัดและนับคำ + POS Tagging ---
+def is_english_word(w: str) -> bool:
+    """ตรวจสอบว่าเป็นคำภาษาอังกฤษหรือไม่"""
+    return any('a' <= c.lower() <= 'z' for c in w)
+
+# --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging (Thai & English) ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0, {}, {}
@@ -298,14 +314,34 @@ def word_count(lyrics: str):
         key=lambda item: (-item[1], get_corpus_frequency(item[0]))
     )
 
-    # POS Tagging (orchid_ud)
+    # --- วิเคราะห์ POS Tagging แยกคำไทยและอังกฤษ ---
     list_of_words = [k for k, v in sorted_all_list]
-    postag = pos_tag(list_of_words, corpus="orchid_ud") if list_of_words else []
+    thai_words = [w for w in list_of_words if not is_english_word(w)]
+    eng_words = [w for w in list_of_words if is_english_word(w)]
     
-    word_to_pos = {w: tag for w, tag in postag}
+    word_to_pos = {}
     
+    # 1. Thai POS Tagging (orchid_ud)
+    if thai_words:
+        thai_postag = thai_pos_tag(thai_words, corpus="orchid_ud")
+        for w, tag in thai_postag:
+            word_to_pos[w] = tag
+            
+    # 2. English POS Tagging (NLTK Universal POS Tags)
+    if eng_words:
+        try:
+            eng_postag = nltk.pos_tag(eng_words, tagset="universal")
+            for w, tag in eng_postag:
+                word_to_pos[w] = tag
+        except Exception:
+            # Fallback หาก NLTK ไม่พร้อมใช้งาน
+            for w in eng_words:
+                word_to_pos[w] = "NOUN"
+
+    # รวบรวมความถี่ของ POS Tag ทั้งหมด
     pos_dict = {}
-    for w, tag in postag:
+    for w in list_of_words:
+        tag = word_to_pos.get(w, "X")
         pos_dict[tag] = pos_dict.get(tag, 0) + 1
 
     pos_dict_sorted = dict(sorted(pos_dict.items(), key=operator.itemgetter(1), reverse=True))
@@ -350,7 +386,7 @@ r1_left, r1_right = st.columns([1.3, 1], gap="medium")
 
 with r1_left:
     with st.container(key="input_box"):
-        st.markdown('<div class="card-title">📝 Thai Word Counter & Frequency Analyzer</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">📝 Thai & English Word Counter</div>', unsafe_allow_html=True)
         st.markdown('<div class="card-subtitle">วางเนื้อเพลงหรือข้อความภาษาไทยหรืออังกฤษเพื่อวิเคราะห์และนับความถี่ของคำ</div>', unsafe_allow_html=True)
         
         if st.session_state.history_list:
@@ -497,7 +533,7 @@ with r1_right:
         </head>
         <body>
             <a class="dl-btn" href="data:image/png;base64,{img_b64}" download="word_count_summary.png">
-                📸 Save Image
+                📸 บันทึกภาพ (9:16)
             </a>
             <button class="circle-share-btn" onclick="triggerNativeShare()" title="แชร์">
                 <svg viewBox="0 0 24 24">
