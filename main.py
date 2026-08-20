@@ -76,18 +76,18 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล (จัดให้อยู่ตรงกลาง 100%) */
+    /* 6. ปุ่มประมวลผล */
     div.stButton {
         display: flex !important;
         justify-content: center !important;
+        align-items: center !important;
         width: 100% !important;
-        margin-top: 14px !important;
     }
     div.stButton > button {
         background: #34324b !important;
         color: #ffffff !important;
         border-radius: 20px !important;
-        padding: 6px 38px !important;
+        padding: 6px 32px !important;
         font-size: 0.95rem !important;
         font-weight: 500 !important;
         border: none !important;
@@ -295,7 +295,13 @@ with r1_left:
             height=180
         )
         
-        if st.button("ประมวลผล"):
+        # จัดปุ่มให้อยู่กึ่งกลางเป๊ะ
+        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+        _, btn_center, _ = st.columns([1, 1.1, 1])
+        with btn_center:
+            btn_clicked = st.button("ประมวลผล", use_container_width=True)
+            
+        if btn_clicked:
             st.session_state.current_text = text_input
             if text_input.strip():
                 if text_input in st.session_state.history_list:
