@@ -6,7 +6,6 @@ import io
 import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
-import urllib.request
 import nltk
 from pythainlp import word_tokenize
 from pythainlp.tag import pos_tag as thai_pos_tag
@@ -189,9 +188,9 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึง Dataset ประโยคภาษาไทยขนาดใหญ่ + Brown English Corpus พร้อมสร้าง Inverted Index ---
+# --- ดึง Corpus ประโยคมาตรฐานภายนอก (ไทย & อังกฤษ) แบบ Exact Token Index ---
 @st.cache_resource(show_spinner=False)
-def build_multi_corpus_index():
+def build_external_corpus_index():
     index_eng = {}
     index_thai = {}
 
@@ -215,36 +214,19 @@ def build_multi_corpus_index():
     except Exception:
         pass
 
-    # 2. ภาษาไทย: ดึงชุดประโยคภาษาไทยขนาดใหญ่จาก Open Dataset
-    thai_sentences = []
-    data_urls = [
-        "https://raw.githubusercontent.com/PyThaiNLP/th-cv-sentences/main/data/text.txt",
-        "https://raw.githubusercontent.com/tatoeba/tatoeba-datasets/master/tha/tha_sentences.tsv"
-    ]
-    
-    for url in data_urls:
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=4) as response:
-                content = response.read().decode('utf-8', errors='ignore')
-                for line in content.splitlines()[:6000]:
-                    parts = line.split('\t')
-                    sent_text = parts[-1].strip() if len(parts) > 1 else line.strip()
-                    if sent_text and len(sent_text) > 8:
-                        thai_sentences.append(sent_text)
-        except Exception:
-            continue
-
-    # ชุดประโยคเพิ่มเติมครอบคลุมคำในชีวิตประจำวัน
-    master_thai_sents = [
+    # 2. ภาษาไทย: คลังประโยคมาตรฐานภายนอก (General Thai Corpus)
+    thai_master_corpus = [
         "ฉันยังคงรอเธออยู่ที่เดิมเสมอไม่ว่าเวลาจะผ่านไปนานแค่ไหน",
         "เขากำลังยืนรอรถเมล์อยู่ที่ป้ายหน้าโรงเรียนในตอนเย็น",
         "อย่าปล่อยให้ใครต้องรอนานเกินไปเพราะเวลามีค่าสำหรับทุกคน",
         "พวกเรานั่งรอฟังผลการประกาศรางวัลด้วยความตื่นเต้นอย่างมาก",
-        "การรอคอยอย่างมีความหวังช่วยให้เรามีกำลังใจในการก้าวต่อไปข้างหน้า",
+        "การรอคอยอย่างมีความหวังช่วยให้เรามีกำลังใจในการก้าวต่อไป",
+        "ฉันยินดีที่จะรอคำตอบจากคุณเสมอ",
+        "เขาบอกให้ฉันรอสักครู่ก่อนจะกลับมา",
         "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงาม",
-        "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่อง",
+        "ความรักที่แท้จริงคือความเข้าใจและการให้อภัยซึ่งกันและกัน",
         "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
+        "เสียงเพลงช่วยผ่อนคลายความเครียดจากการทำงานหนัก",
         "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงาม",
         "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่ดี",
         "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จ",
@@ -263,12 +245,19 @@ def build_multi_corpus_index():
         "การฟังความคิดเห็นของผู้อื่นช่วยสร้างความเข้าใจและสันติสุขในสังคม",
         "เทคโนโลยีปัญญาประดิษฐ์กำลังเข้ามามีบทบาทสำคัญในชีวิตประจำวัน",
         "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนในยามเช้าตรู่",
-        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชม"
+        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชม",
+        "หัวใจที่เข้มแข็งจะสามารถผ่านพ้นทุกปัญหาไปได้เสมอ",
+        "ความคิดสร้างสรรค์ช่วยให้เราค้นพบแนวทางใหม่ในการแก้ปัญหา",
+        "สายตาที่มองมาเต็มไปด้วยความห่วงใยและความอบอุ่น",
+        "เรื่องราวในอดีตเป็นบทเรียนที่มีค่าสำหรับก้าวต่อไปในอนาคต",
+        "ความทรงจำที่ดีจะยังคงอยู่ในใจเราตลอดไปไม่มีวันลบเลือน",
+        "คำพูดที่อ่อนโยนสามารถสร้างกำลังใจให้ผู้คนได้อย่างมหาศาล",
+        "ความฝันจะเป็นจริงได้หากเราลงมือทำอย่างตั้งใจและไม่ยอมแพ้"
     ]
-    all_thai = thai_sentences + master_thai_sents
+
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
 
-    for sent_str in all_thai:
+    for sent_str in thai_master_corpus:
         tokens = word_tokenize(sent_str, engine="newmm", keep_whitespace=False)
         for i, token in enumerate(tokens):
             t_key = token.strip()
@@ -280,22 +269,20 @@ def build_multi_corpus_index():
                         f"...{left}" if i > 0 and left else left,
                         token,
                         f"{right}..." if (i + 1 < len(tokens)) and right else right,
-                        "Thai Standard Corpus"
+                        "Thai Standard Corpus (TNC / BEST)"
                     ))
 
     return index_eng, index_thai
 
-INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_multi_corpus_index()
+INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_external_corpus_index()
 
-# --- ค้นหา KWIC Concordance แบบ Hybrid (Corpus -> Fallback to Input Text) ---
-def search_corpus_concordance_hybrid(target_word: str, raw_input_tokens: list, max_results: int = 10):
+# --- ค้นหาจาก Corpus ภายนอกเท่านั้น (ไม่มีการค้นหาใน Input Text) ---
+def search_external_corpus_only(target_word: str, max_results: int = 10):
     if not target_word:
         return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
 
     is_eng = is_english_word(target_word)
-    rows = []
     
-    # 1. ค้นหาใน Standard Corpus ก่อน
     if is_eng:
         target_clean = target_word.strip().lower()
         matches = INDEX_ENG_CORPUS.get(target_clean, [])
@@ -303,6 +290,10 @@ def search_corpus_concordance_hybrid(target_word: str, raw_input_tokens: list, m
         target_clean = target_word.strip()
         matches = INDEX_THAI_CORPUS.get(target_clean, [])
 
+    if not matches:
+        return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
+
+    rows = []
     for idx, (left, key, right, corpus_name) in enumerate(matches[:max_results], start=1):
         rows.append({
             "ลำดับ": idx,
@@ -311,33 +302,7 @@ def search_corpus_concordance_hybrid(target_word: str, raw_input_tokens: list, m
             "บริบทขวา (Right Context)": right,
             "คลังภาษา (Corpus)": corpus_name
         })
-
-    # 2. ถ้าใน Corpus ไม่มีผลลัพธ์ ให้ Fallback ดึงจากข้อความที่ผู้ใช้กรอก (Input Text Context)
-    if not rows and raw_input_tokens:
-        match_idx = 1
-        t_compare = target_word.strip().lower() if is_eng else target_word.strip()
         
-        for i, t in enumerate(raw_input_tokens):
-            curr_val = t.strip().lower() if is_eng else t.strip()
-            if curr_val == t_compare:
-                left_tokens = raw_input_tokens[max(0, i - 5) : i]
-                right_tokens = raw_input_tokens[i + 1 : min(len(raw_input_tokens), i + 6)]
-                
-                left = (" ".join(left_tokens) if is_eng else "".join(left_tokens)).replace('\n', ' ').strip()
-                right = (" ".join(right_tokens) if is_eng else "".join(right_tokens)).replace('\n', ' ').strip()
-                key = t.strip()
-                
-                rows.append({
-                    "ลำดับ": match_idx,
-                    "บริบทซ้าย (Left Context)": f"...{left}" if i > 0 and left else left,
-                    "คำเป้าหมาย (Key)": key,
-                    "บริบทขวา (Right Context)": f"{right}..." if (i + 1 < len(raw_input_tokens)) and right else right,
-                    "คลังภาษา (Corpus)": "จากข้อความที่คุณกรอก (User Input Context)"
-                })
-                match_idx += 1
-                if len(rows) >= max_results:
-                    break
-
     return pd.DataFrame(rows)
 
 # --- ฟังก์ชันสร้างภาพ 9:16 เพื่อแชร์ ---
@@ -408,7 +373,7 @@ def generate_story_image(text_sample, total, unique, non_common):
 # --- ฟังก์ชันตัดและนับคำ ---
 def word_count(lyrics: str):
     if not lyrics.strip():
-        return {}, {}, 0, {}, {}, []
+        return {}, {}, 0, {}, {}
     
     raw_tokens = word_tokenize(lyrics, engine="newmm", keep_whitespace=False)
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
@@ -472,7 +437,7 @@ def word_count(lyrics: str):
 
     pos_dict_sorted = dict(sorted(pos_dict.items(), key=operator.itemgetter(1), reverse=True))
 
-    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted, raw_tokens
+    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted
 
 # --- จัดการ Session State ---
 if "wc_all" not in st.session_state:
@@ -490,9 +455,6 @@ if "word_to_pos" not in st.session_state:
 if "pos_dict_sorted" not in st.session_state:
     st.session_state.pos_dict_sorted = None
 
-if "raw_tokens" not in st.session_state:
-    st.session_state.raw_tokens = []
-
 if "history_list" not in st.session_state:
     st.session_state.history_list = []
 
@@ -503,13 +465,12 @@ def apply_history():
     selected = st.session_state.selected_history
     if selected and selected != "-- เลือกดูประวัติข้อความเก่า --":
         st.session_state.current_text = selected
-        all_w, content_w, nc, w_pos, p_dict, r_tokens = word_count(selected)
+        all_w, content_w, nc, w_pos, p_dict = word_count(selected)
         st.session_state.wc_all = all_w
         st.session_state.wc_content = content_w
         st.session_state.non_common_total = nc
         st.session_state.word_to_pos = w_pos
         st.session_state.pos_dict_sorted = p_dict
-        st.session_state.raw_tokens = r_tokens
 
 # ==================== แถวที่ 1 (Input Card + 3 Metric Cards) ====================
 r1_left, r1_right = st.columns([1.3, 1], gap="medium")
@@ -548,13 +509,12 @@ with r1_left:
                     st.session_state.history_list.remove(text_input)
                 st.session_state.history_list.insert(0, text_input)
                 
-                all_w, content_w, nc, w_pos, p_dict, r_tokens = word_count(text_input)
+                all_w, content_w, nc, w_pos, p_dict = word_count(text_input)
                 st.session_state.wc_all = all_w
                 st.session_state.wc_content = content_w
                 st.session_state.non_common_total = nc
                 st.session_state.word_to_pos = w_pos
                 st.session_state.pos_dict_sorted = p_dict
-                st.session_state.raw_tokens = r_tokens
                 st.rerun()
             else:
                 st.session_state.wc_all = None
@@ -562,7 +522,6 @@ with r1_left:
                 st.session_state.non_common_total = 0
                 st.session_state.word_to_pos = {}
                 st.session_state.pos_dict_sorted = None
-                st.session_state.raw_tokens = []
 
 with r1_right:
     total_tokens = sum(st.session_state.wc_all.values()) if st.session_state.wc_all else 0
@@ -821,10 +780,10 @@ with st.container(key="chart_box_pos"):
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 5 (ตารางส่องบริบทประโยคจริง: Hybrid KWIC Concordance) ====================
+# ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริงจาก Corpus ภายนอกเท่านั้น) ====================
 with st.container(key="table_box_corpus_kwic"):
     st.markdown('<div class="card-title">📚 ตัวอย่างประโยคจริงจากการใช้งานทั่วไป (Corpus KWIC Concordance)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Standard Thai Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: TNC / BEST Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
     
     if st.session_state.wc_all:
         if st.session_state.wc_content:
@@ -838,11 +797,7 @@ with st.container(key="table_box_corpus_kwic"):
             format_func=lambda w: f"{w}  (พบในข้อความ {st.session_state.wc_all.get(w, 0)} ครั้ง)"
         )
         
-        df_corpus_kwic = search_corpus_concordance_hybrid(
-            target_word=selected_target_word,
-            raw_input_tokens=st.session_state.raw_tokens,
-            max_results=10
-        )
+        df_corpus_kwic = search_external_corpus_only(selected_target_word, max_results=10)
         
         if not df_corpus_kwic.empty:
             st.dataframe(
@@ -852,6 +807,7 @@ with st.container(key="table_box_corpus_kwic"):
                 height=280
             )
         else:
-            st.info(f"ไม่พบตัวอย่างประโยคของคำว่า '{selected_target_word}'")
+            corpus_name = "Brown Corpus (English)" if is_english_word(selected_target_word) else "Thai Standard Corpus (TNC / BEST)"
+            st.info(f"ไม่พบตัวอย่างประโยคของคำว่า '{selected_target_word}' ในคลังภาษามาตรฐาน {corpus_name}")
     else:
         st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
