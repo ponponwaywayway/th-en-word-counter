@@ -528,7 +528,7 @@ with r1_right:
         </head>
         <body>
             <a class="dl-btn" href="data:image/png;base64,{img_b64}" download="word_count_summary.png">
-                📸 บันทึกภาพ (9:16)
+                📸 Save Image ✨
             </a>
             <button class="circle-share-btn" onclick="triggerNativeShare()" title="แชร์">
                 <svg viewBox="0 0 24 24">
