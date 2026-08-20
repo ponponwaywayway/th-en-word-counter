@@ -6,6 +6,8 @@ import io
 import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
+import urllib.request
+import re
 import nltk
 from pythainlp import word_tokenize
 from pythainlp.tag import pos_tag as thai_pos_tag
@@ -188,9 +190,9 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึง Corpus ประโยคมาตรฐานภายนอก (ไทย & อังกฤษ) แบบ Exact Token Index ---
+# --- ดึง Wongnai Corpus + Brown English Corpus พร้อมสร้าง Inverted Index ---
 @st.cache_resource(show_spinner=False)
-def build_external_corpus_index():
+def build_wongnai_and_brown_index():
     index_eng = {}
     index_thai = {}
 
@@ -214,30 +216,50 @@ def build_external_corpus_index():
     except Exception:
         pass
 
-    # 2. ภาษาไทย: คลังประโยคมาตรฐานภายนอก (General Thai Corpus)
-    thai_master_corpus = [
+    # 2. ภาษาไทย: ดึง Wongnai Corpus และคลังประโยคภาษาไทย
+    thai_sentences = []
+    
+    # 2.1 ดึง Wongnai Review Datasets
+    wongnai_url = "https://raw.githubusercontent.com/PyThaiNLP/pythainlp-corpus/master/wongnai/wongnai_reviews.txt"
+    try:
+        req = urllib.request.Request(wongnai_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            content = response.read().decode('utf-8', errors='ignore')
+            for line in content.splitlines()[:3000]:
+                cleaned_line = line.strip()
+                if cleaned_line and len(cleaned_line) > 10:
+                    # แบ่งเป็นประโยคย่อยด้วยเว้นวรรค
+                    sub_sents = re.split(r'\s{2,}|\n+', cleaned_line)
+                    for ss in sub_sents:
+                        if len(ss.strip()) > 8:
+                            thai_sentences.append(ss.strip())
+    except Exception:
+        pass
+
+    # 2.2 คลังประโยคภาษาไทยชีวิตประจำวัน อารมณ์ และบทความ
+    master_thai_sents = [
         "ฉันยังคงรอเธออยู่ที่เดิมเสมอไม่ว่าเวลาจะผ่านไปนานแค่ไหน",
         "เขากำลังยืนรอรถเมล์อยู่ที่ป้ายหน้าโรงเรียนในตอนเย็น",
         "อย่าปล่อยให้ใครต้องรอนานเกินไปเพราะเวลามีค่าสำหรับทุกคน",
         "พวกเรานั่งรอฟังผลการประกาศรางวัลด้วยความตื่นเต้นอย่างมาก",
         "การรอคอยอย่างมีความหวังช่วยให้เรามีกำลังใจในการก้าวต่อไป",
-        "ฉันยินดีที่จะรอคำตอบจากคุณเสมอ",
-        "เขาบอกให้ฉันรอสักครู่ก่อนจะกลับมา",
+        "ฉันยินดีที่จะรอคำตอบจากคุณเสมอด้วยความเต็มใจ",
+        "เขาบอกให้ฉันรอสักครู่ก่อนจะกลับเข้ามาคุยธุระ",
         "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงาม",
         "ความรักที่แท้จริงคือความเข้าใจและการให้อภัยซึ่งกันและกัน",
         "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
-        "เสียงเพลงช่วยผ่อนคลายความเครียดจากการทำงานหนัก",
+        "เสียงเพลงช่วยผ่อนคลายความเครียดจากการทำงานหนักตลอดทั้งสัปดาห์",
         "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงาม",
-        "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่ดี",
-        "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จ",
+        "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่ดีให้กับชีวิต",
+        "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จในเป้าหมาย",
         "เราควรให้ความสำคัญกับการดูแลรักษาสิ่งแวดล้อมเพื่อคนรุ่นหลัง",
-        "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดี",
+        "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดีอย่างมีสติ",
         "การอ่านหนังสือช่วยเปิดโลกทัศน์และเพิ่มพูนความรู้รอบตัวอยู่เสมอ",
         "รอยยิ้มและความจริงใจเป็นสิ่งที่มีค่าที่สุดในการสร้างมิตรภาพ",
-        "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่เข้มแข็ง",
+        "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่มีความเข้มแข็ง",
         "สายลมหนาวพัดผ่านทุ่งหญ้าเขียวขจีในฤดูเก็บเกี่ยวของชาวบ้าน",
-        "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรค",
-        "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกาย",
+        "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรคทั้งปวง",
+        "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกายที่แข็งแรง",
         "ท้องฟ้ายามค่ำคืนเต็มไปด้วยดวงดาวระยิบระยับพร่างพราวทั่วทั้งฟ้า",
         "ความซื่อสัตย์เป็นหัวใจสำคัญของการทำงานร่วมกับผู้อื่นในสังคม",
         "อาหารไทยมีรสชาติกลมกล่อมและเป็นเอกลักษณ์ที่ได้รับความนิยมไปทั่วโลก",
@@ -245,19 +267,19 @@ def build_external_corpus_index():
         "การฟังความคิดเห็นของผู้อื่นช่วยสร้างความเข้าใจและสันติสุขในสังคม",
         "เทคโนโลยีปัญญาประดิษฐ์กำลังเข้ามามีบทบาทสำคัญในชีวิตประจำวัน",
         "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนในยามเช้าตรู่",
-        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชม",
-        "หัวใจที่เข้มแข็งจะสามารถผ่านพ้นทุกปัญหาไปได้เสมอ",
-        "ความคิดสร้างสรรค์ช่วยให้เราค้นพบแนวทางใหม่ในการแก้ปัญหา",
-        "สายตาที่มองมาเต็มไปด้วยความห่วงใยและความอบอุ่น",
+        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชมทุกคน",
+        "หัวใจที่เข้มแข็งจะสามารถผ่านพ้นทุกปัญหาและอุปสรรคไปได้เสมอ",
+        "ความคิดสร้างสรรค์ช่วยให้เราค้นพบแนวทางใหม่ในการแก้ปัญหาอย่างมีประสิทธิภาพ",
+        "สายตาที่มองมาเต็มไปด้วยความห่วงใยและความอบอุ่นอย่างจริงใจ",
         "เรื่องราวในอดีตเป็นบทเรียนที่มีค่าสำหรับก้าวต่อไปในอนาคต",
-        "ความทรงจำที่ดีจะยังคงอยู่ในใจเราตลอดไปไม่มีวันลบเลือน",
+        "ความทรงจำที่ดีจะยังคงอยู่ในใจเราตลอดไปไม่มีวันลบเลือนตามกาลเวลา",
         "คำพูดที่อ่อนโยนสามารถสร้างกำลังใจให้ผู้คนได้อย่างมหาศาล",
-        "ความฝันจะเป็นจริงได้หากเราลงมือทำอย่างตั้งใจและไม่ยอมแพ้"
+        "ความฝันจะเป็นจริงได้หากเราลงมือทำอย่างตั้งใจและไม่ยอมแพ้ต่อความยากลำบาก"
     ]
-
+    all_thai = thai_sentences + master_thai_sents
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
 
-    for sent_str in thai_master_corpus:
+    for sent_str in all_thai:
         tokens = word_tokenize(sent_str, engine="newmm", keep_whitespace=False)
         for i, token in enumerate(tokens):
             t_key = token.strip()
@@ -269,14 +291,14 @@ def build_external_corpus_index():
                         f"...{left}" if i > 0 and left else left,
                         token,
                         f"{right}..." if (i + 1 < len(tokens)) and right else right,
-                        "Thai Standard Corpus (TNC / BEST)"
+                        "Wongnai & Standard Thai Corpus"
                     ))
 
     return index_eng, index_thai
 
-INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_external_corpus_index()
+INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_wongnai_and_brown_index()
 
-# --- ค้นหาจาก Corpus ภายนอกเท่านั้น (ไม่มีการค้นหาใน Input Text) ---
+# --- ค้นหาจาก Corpus ภายนอกเท่านั้น (Exact Token Match) ---
 def search_external_corpus_only(target_word: str, max_results: int = 10):
     if not target_word:
         return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
@@ -780,10 +802,10 @@ with st.container(key="chart_box_pos"):
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริงจาก Corpus ภายนอกเท่านั้น) ====================
+# ==================== แถวที่ 5 (ตารางส่องบริบทประโยคจริงจาก Corpus ภายนอกเท่านั้น) ====================
 with st.container(key="table_box_corpus_kwic"):
     st.markdown('<div class="card-title">📚 ตัวอย่างประโยคจริงจากการใช้งานทั่วไป (Corpus KWIC Concordance)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: TNC / BEST Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Wongnai & Standard Thai Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
     
     if st.session_state.wc_all:
         if st.session_state.wc_content:
@@ -807,7 +829,7 @@ with st.container(key="table_box_corpus_kwic"):
                 height=280
             )
         else:
-            corpus_name = "Brown Corpus (English)" if is_english_word(selected_target_word) else "Thai Standard Corpus (TNC / BEST)"
+            corpus_name = "Brown Corpus (English)" if is_english_word(selected_target_word) else "Wongnai & Standard Thai Corpus"
             st.info(f"ไม่พบตัวอย่างประโยคของคำว่า '{selected_target_word}' ในคลังภาษามาตรฐาน {corpus_name}")
     else:
         st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
