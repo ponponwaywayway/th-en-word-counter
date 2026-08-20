@@ -189,88 +189,90 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึง Dataset ประโยคภาษาไทยจริง (Tatoeba/PyThaiNLP Corpus) + Brown English Corpus ---
+# --- ตัดคำและทำ Index แบบ Exact Token Match ---
 @st.cache_resource(show_spinner=False)
 def build_multi_corpus_index():
     index_eng = {}
     index_thai = {}
 
-    # 1. ภาษาอังกฤษ: NLTK Brown Corpus (57,000+ ประโยค)
+    # 1. ภาษาอังกฤษ: NLTK Brown Corpus
     try:
         from nltk.corpus import brown
         for s in brown.sents():
             sent = [str(w) for w in s]
             for i, token in enumerate(sent):
-                t_key = token.lower()
-                if len(t_key) > 1 and t_key.isalpha():
+                t_key = token.lower().strip()
+                if t_key.isalpha():
                     if len(index_eng.get(t_key, [])) < 12:
                         left = " ".join(sent[max(0, i - 6) : i])
                         right = " ".join(sent[i + 1 : min(len(sent), i + 7)])
                         index_eng.setdefault(t_key, []).append((
-                            f"...{left}" if i > 0 else left,
+                            f"...{left}" if i > 0 and left else left,
                             token,
-                            f"{right}..." if i + 1 < len(sent) else right,
+                            f"{right}..." if i + 1 < len(sent) and right else right,
                             "Brown Corpus (English)"
                         ))
     except Exception:
         pass
 
-    # 2. ภาษาไทย: ดึงชุดประโยคภาษาไทยมาตรฐานจริงจาก Open Dataset (Tatoeba Thai Sentences)
+    # 2. ภาษาไทย: ดึงข้อมูลประโยคตัวอย่าง
     thai_sentences = []
     try:
         url = "https://raw.githubusercontent.com/tatoeba/tatoeba-datasets/master/tha/tha_sentences.tsv"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             content = response.read().decode('utf-8')
-            for line in content.splitlines()[:5000]: # โหลด 5,000 ประโยคจริง
+            for line in content.splitlines()[:6000]:
                 parts = line.split('\t')
                 if len(parts) >= 3:
                     thai_sentences.append(parts[2].strip())
     except Exception:
         pass
 
-    # ชุดประโยคเสริมความครอบคลุม
-    fallback_thai_corpus = [
-        "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงามให้กับสังคม",
-        "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่องในทุกวงการ",
-        "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอไม่ว่าจะอยู่ที่ใด",
-        "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงามท่ามกลางธรรมชาติ",
-        "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่มีคุณค่าให้กับชีวิต",
-        "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จในเป้าหมายที่ตั้งใจไว้",
-        "เราควรให้ความสำคัญกับการดูแลรักษาสิ่งแวดล้อมและทรัพยากรธรรมชาติเพื่อคนรุ่นหลัง",
-        "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดีอย่างมีสติ",
-        "การอ่านหนังสือช่วยเปิดโลกทัศน์และเพิ่มพูนความรู้รอบตัวอยู่เสมอในทุกช่วงวัย",
-        "รอยยิ้มและความจริงใจเป็นสิ่งที่มีค่าที่สุดในการสร้างมิตรภาพและความสัมพันธ์อันดี",
-        "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่มีความพร้อมรับมือกับทุกปัญหา",
-        "สายลมหนาวพัดผ่านทุ่งหญ้าเขียวขจีในฤดูเก็บเกี่ยวของชาวบ้านในชนบท",
-        "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรคทั้งปวงในชีวิต",
-        "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกายที่แข็งแรงสมบูรณ์",
-        "การเรียนรู้สิ่งใหม่ๆ ตลอดชีวิตช่วยพัฒนาศักยภาพและเปิดโอกาสใหม่ให้ตนเองอยู่เสมอ",
-        "ท้องฟ้ายามค่ำคืนเต็มไปด้วยดวงดาวระยิบระยับพร่างพราวทั่วทั้งผืนฟ้าอันกว้างใหญ่",
-        "ความซื่อสัตย์และการทำงานอย่างทุ่มเทเป็นหัวใจสำคัญของการทำงานร่วมกับผู้อื่นในองค์กร",
-        "อาหารไทยมีรสชาติกลมกล่อมและเป็นเอกลักษณ์ที่ได้รับความนิยมไปทั่วทุกมุมโลก",
-        "ภาษาและวัฒนธรรมเป็นมรดกทางปัญญาที่สะท้อนถึงประวัติศาสตร์อันยาวนานของชาติไทย",
-        "การฟังความคิดเห็นของผู้อื่นด้วยความเคารพช่วยสร้างความเข้าใจและสันติสุขในสังคม",
-        "เทคโนโลยีปัญญาประดิษฐ์กำลังเข้ามามีบทบาทสำคัญในการเปลี่ยนแปลงรูปแบบการทำงานในอนาคต",
-        "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนสาธารณะในยามเช้าตรู่ของฤดูใบไม้ผลิ",
-        "ความมุ่งมั่นและวินัยในการทำงานเป็นกุญแจสำคัญที่นำไปสู่ความเป็นมืออาชีพอย่างแท้จริง",
-        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชมทุกคนในโรงภาพยนตร์",
-        "การให้เกียรติซึ่งกันและกันคือพื้นฐานที่มั่นคงที่สุดของความสัมพันธ์ทุกรูปแบบในสังคม"
+    additional_thai_corpus = [
+        "ฉันยังคงรอเธออยู่ที่เดิมเสมอแม้เวลาจะผ่านไปนานแค่ไหน",
+        "เขากำลังยืนรอรถเมล์อยู่ที่ป้ายหน้าโรงเรียนในตอนเย็น",
+        "อย่าปล่อยให้ใครต้องรอนานเกินไปเพราะเวลามีค่าสำหรับทุกคน",
+        "พวกเรานั่งรอฟังผลการประกาศรางวัลด้วยความตื่นเต้นอย่างมาก",
+        "การรอคอยอย่างมีความหวังช่วยให้เรามีกำลังใจในการก้าวต่อไป",
+        "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงาม",
+        "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่อง",
+        "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
+        "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงาม",
+        "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่ดี",
+        "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จ",
+        "เราควรให้ความสำคัญกับการดูแลรักษาสิ่งแวดล้อมเพื่อคนรุ่นหลัง",
+        "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดี",
+        "การอ่านหนังสือช่วยเปิดโลกทัศน์และเพิ่มพูนความรู้รอบตัวอยู่เสมอ",
+        "รอยยิ้มและความจริงใจเป็นสิ่งที่มีค่าที่สุดในการสร้างมิตรภาพ",
+        "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่เข้มแข็ง",
+        "สายลมหนาวพัดผ่านทุ่งหญ้าเขียวขจีในฤดูเก็บเกี่ยวของชาวบ้าน",
+        "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรค",
+        "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกาย",
+        "ท้องฟ้ายามค่ำคืนเต็มไปด้วยดวงดาวระยิบระยับพร่างพราวทั่วทั้งฟ้า",
+        "ความซื่อสัตย์เป็นหัวใจสำคัญของการทำงานร่วมกับผู้อื่นในสังคม",
+        "อาหารไทยมีรสชาติกลมกล่อมและเป็นเอกลักษณ์ที่ได้รับความนิยมไปทั่วโลก",
+        "ภาษาและวัฒนธรรมเป็นมรดกทางปัญญาที่สะท้อนถึงประวัติศาสตร์อันยาวนาน",
+        "การฟังความคิดเห็นของผู้อื่นช่วยสร้างความเข้าใจและสันติสุขในสังคม",
+        "เทคโนโลยีปัญญาประดิษฐ์กำลังเข้ามามีบทบาทสำคัญในชีวิตประจำวัน",
+        "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนในยามเช้าตรู่",
+        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชม"
     ]
-    all_thai_sents = thai_sentences + fallback_thai_corpus
+    all_thai_sents = thai_sentences + additional_thai_corpus
+    sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
 
     for sent_str in all_thai_sents:
-        tokens = word_tokenize(sent_str, keep_whitespace=False)
+        tokens = word_tokenize(sent_str, engine="newmm", keep_whitespace=False)
         for i, token in enumerate(tokens):
             t_key = token.strip()
-            if len(t_key) > 1 and t_key not in ALL_COMMON_WORDS:
+            if t_key and t_key not in sym:
                 if len(index_thai.get(t_key, [])) < 12:
-                    left = "".join(tokens[max(0, i - 5) : i])
-                    right = "".join(tokens[i + 1 : min(len(tokens), i + 6)])
+                    left = "".join(tokens[max(0, i - 5) : i]).strip()
+                    right = "".join(tokens[i + 1 : min(len(tokens), i + 6)]).strip()
                     index_thai.setdefault(t_key, []).append((
-                        f"...{left}" if i > 0 else left,
+                        f"...{left}" if i > 0 and left else left,
                         token,
-                        f"{right}..." if i + 1 < len(tokens) else right,
+                        f"{right}..." if (i + 1 < len(tokens)) and right else right,
                         "Thai Standard Corpus (Tatoeba / TNC)"
                     ))
 
@@ -278,31 +280,19 @@ def build_multi_corpus_index():
 
 INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_multi_corpus_index()
 
-# --- ค้นหา KWIC Concordance จาก Index ได้ทันที (< 0.001 วินาที) ---
+# --- ค้นหา KWIC Concordance จาก Index ด้วย Token Match ---
 def search_corpus_concordance_fast(target_word: str, max_results: int = 10):
     if not target_word:
         return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
 
     is_eng = is_english_word(target_word)
-    target_clean = target_word.strip().lower()
     
     if is_eng:
+        target_clean = target_word.strip().lower()
         matches = INDEX_ENG_CORPUS.get(target_clean, [])
-        if not matches:
-            for k, v in INDEX_ENG_CORPUS.items():
-                if k.startswith(target_clean):
-                    matches.extend(v)
-                    if len(matches) >= max_results:
-                        break
     else:
-        target_t = target_word.strip()
-        matches = INDEX_THAI_CORPUS.get(target_t, [])
-        if not matches:
-            for k, v in INDEX_THAI_CORPUS.items():
-                if target_t in k or k in target_t:
-                    matches.extend(v)
-                    if len(matches) >= max_results:
-                        break
+        target_clean = target_word.strip()
+        matches = INDEX_THAI_CORPUS.get(target_clean, [])
 
     if not matches:
         return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
@@ -384,12 +374,12 @@ def generate_story_image(text_sample, total, unique, non_common):
     img.save(buf, format="PNG")
     return buf.getvalue()
 
-# --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging ---
+# --- ฟังก์ชันตัดและนับคำ ---
 def word_count(lyrics: str):
     if not lyrics.strip():
         return {}, {}, 0, {}, {}
     
-    raw_tokens = word_tokenize(lyrics, keep_whitespace=False)
+    raw_tokens = word_tokenize(lyrics, engine="newmm", keep_whitespace=False)
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
     lyrics_token_clean = []
     
