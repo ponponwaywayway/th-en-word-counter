@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import operator
+import io
 import altair as alt
+from PIL import Image, ImageDraw, ImageFont
 from pythainlp import word_tokenize
 from pythainlp.tag import pos_tag
 from pythainlp.corpus import thai_stopwords
@@ -76,14 +78,14 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล */
-    div.stButton {
+    /* 6. ปุ่มประมวลผล และปุ่มดาวน์โหลด */
+    div.stButton, div.stDownloadButton {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
         width: 100% !important;
     }
-    div.stButton > button {
+    div.stButton > button, div.stDownloadButton > button {
         background: #34324b !important;
         color: #ffffff !important;
         border-radius: 20px !important;
@@ -94,7 +96,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(52, 50, 75, 0.25) !important;
         transition: all 0.2s ease !important;
     }
-    div.stButton > button:hover {
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
         background: #232136 !important;
         color: #ffffff !important;
         transform: translateY(-1px);
@@ -142,6 +144,83 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- ฟังก์ชันสร้างภาพ 9:16 เพื่อแชร์ (1080 x 1920 px) ---
+def generate_story_image(text_sample, total, unique, non_common):
+    width, height = 1080, 1920
+    img = Image.new("RGB", (width, height), "#ffffff")
+    draw = ImageDraw.Draw(img)
+
+    # วาดพื้นหลัง Gradient สไตล์เดียวกับเว็บ
+    for y in range(height):
+        factor = y / height
+        # ไล่สีจาก #d8e2fd -> #fcdbe8
+        r = int(216 + (252 - 216) * factor)
+        g = int(226 + (219 - 226) * factor)
+        b = int(253 + (232 - 253) * factor)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # โหลดฟอนต์ (fallback เป็น default ถ้าไม่มีฟอนต์ภาษาไทยใน OS)
+    font_paths = [
+        "tahoma.ttf", "leelawad.ttf", "Thonburi.ttc", "Angsana.ttc",
+        "/System/Library/Fonts/Supplemental/Thonburi.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ]
+    font_main = None
+    for p in font_paths:
+        try:
+            font_title = ImageFont.truetype(p, 54)
+            font_sub = ImageFont.truetype(p, 32)
+            font_body = ImageFont.truetype(p, 28)
+            font_num = ImageFont.truetype(p, 64)
+            font_main = True
+            break
+        except Exception:
+            continue
+
+    if not font_main:
+        font_title = ImageFont.load_default()
+        font_sub = font_title
+        font_body = font_title
+        font_num = font_title
+
+    # 1. กรอบใหญ่ Glassmorphism
+    draw.rounded_rectangle([60, 100, 1020, 1820], radius=44, fill=(255, 255, 255, 140), outline=(255, 255, 255), width=4)
+
+    # 2. หัวข้อใหญ่
+    draw.text((120, 160), "📝 Word Counter", fill="#232536", font=font_title)
+    draw.text((120, 230), "Frequency & Token Analysis Summary", fill="#7b7d96", font=font_sub)
+
+    # 3. กล่องตัวอย่าง Text
+    draw.rounded_rectangle([110, 310, 970, 780], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
+    draw.text((150, 350), "ตัวอย่างข้อความ (Sample Text):", fill="#555770", font=font_sub)
+    
+    # ตัดข้อความตัวอย่าง 6 บรรทัด
+    lines = text_sample.strip().split("\n")[:7]
+    sample_text_display = "\n".join([l[:38] + ("..." if len(l) > 38 else "") for l in lines])
+    draw.text((150, 410), sample_text_display, fill="#2b2d42", font=font_body, spacing=14)
+
+    # 4. กล่อง Metric 1: Total Tokens
+    draw.rounded_rectangle([110, 830, 970, 1070], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
+    draw.text((150, 870), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=font_sub)
+    draw.text((150, 930), f"{total:,}", fill="#232536", font=font_num)
+
+    # 5. กล่อง Metric 2: Unique Words
+    draw.rounded_rectangle([110, 1120, 970, 1360], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
+    draw.text((150, 1160), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=font_sub)
+    draw.text((150, 1220), f"{unique:,}", fill="#232536", font=font_num)
+
+    # 6. กล่อง Metric 3: Non-Common Words
+    draw.rounded_rectangle([110, 1410, 970, 1650], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
+    draw.text((150, 1450), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=font_sub)
+    draw.text((150, 1510), f"{non_common:,}", fill="#232536", font=font_num)
+
+    # Footer
+    draw.text((380, 1720), "Created with Streamlit & PyThaiNLP", fill="#8a8ca3", font=font_body)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 # --- คลัง Common / Stop Words ทั้งไทยและอังกฤษ ---
 thai_stop = set(thai_stopwords())
@@ -295,7 +374,7 @@ with r1_left:
             height=180
         )
         
-        # จัดปุ่มให้อยู่กึ่งกลางเป๊ะ
+        # จัดปุ่มให้อยู่กึ่งกลาง
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
         _, btn_center, _ = st.columns([1, 1.1, 1])
         with btn_center:
@@ -341,6 +420,22 @@ with r1_right:
         <div class="metric-value">{non_common_words:,}</div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # ปุ่มดาวน์โหลดรูปภาพสำหรับแชร์ลง Social Media (9:16)
+    if st.session_state.wc_all:
+        img_bytes = generate_story_image(
+            text_sample=st.session_state.current_text,
+            total=total_tokens,
+            unique=unique_tokens,
+            non_common=non_common_words
+        )
+        st.download_button(
+            label="📸 บันทึกภาพสรุปผล (Story 9:16)",
+            data=img_bytes,
+            file_name="word_count_summary.png",
+            mime="image/png",
+            use_container_width=True
+        )
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
