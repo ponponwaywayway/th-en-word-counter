@@ -30,7 +30,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว + ปุ่มกึ่งกลาง ---
+# --- CSS จัดการ Layout + การ์ดสีขาว ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
@@ -40,7 +40,7 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* 2. กรอบสี่เหลี่ยมใหญ่: ลดความกว้าง + จัดกึ่งกลาง เว้นระยะขอบจอสวยงาม */
+    /* 2. กรอบสี่เหลี่ยมใหญ่ */
     .block-container, [data-testid="stMainBlockContainer"] {
         max-width: 1200px !important;
         width: 90% !important;
@@ -62,7 +62,7 @@ st.markdown("""
         border: none !important;
     }
 
-    /* 4. สไตล์การ์ดสีขาวนูน (Solid White Cards) */
+    /* 4. สไตล์การ์ดสีขาวนูน */
     .white-card {
         background-color: #ffffff;
         border-radius: 22px;
@@ -92,7 +92,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล และปุ่มดาวน์โหลด */
+    /* 6. ปุ่มประมวลผล */
     div.stButton {
         display: flex !important;
         justify-content: center !important;
@@ -151,7 +151,8 @@ st.markdown("""
 
     /* กล่อง Widget ฝังในสีขาว */
     .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, 
-    .st-key-table_box_2, .st-key-chart_box_2, .st-key-chart_box_pos {
+    .st-key-table_box_2, .st-key-chart_box_2, .st-key-chart_box_pos,
+    .st-key-table_box_colloc {
         background: #ffffff !important;
         border-radius: 22px !important;
         padding: 24px !important;
@@ -277,7 +278,7 @@ def is_english_word(w: str) -> bool:
 # --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging ---
 def word_count(lyrics: str):
     if not lyrics.strip():
-        return {}, {}, 0, {}, {}
+        return {}, {}, 0, {}, {}, []
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
@@ -341,7 +342,36 @@ def word_count(lyrics: str):
 
     pos_dict_sorted = dict(sorted(pos_dict.items(), key=operator.itemgetter(1), reverse=True))
 
-    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted
+    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted, lyrics_token_clean
+
+# --- ฟังก์ชันสร้าง Co-occurrence Window Table (w-2, w-1, w, w+1, w+2) ---
+def get_cooccurrence_window_df(target_word: str, token_stream: list):
+    if not target_word or not token_stream:
+        return pd.DataFrame(columns=["ลำดับ", "W-2", "W-1", "W (TARGET)", "W+1", "W+2"])
+    
+    rows = []
+    match_count = 1
+    total_len = len(token_stream)
+    
+    for i, token in enumerate(token_stream):
+        if token == target_word:
+            w_minus_2 = token_stream[i - 2] if i >= 2 else "-"
+            w_minus_1 = token_stream[i - 1] if i >= 1 else "-"
+            w_curr = token
+            w_plus_1 = token_stream[i + 1] if i + 1 < total_len else "-"
+            w_plus_2 = token_stream[i + 2] if i + 2 < total_len else "-"
+            
+            rows.append({
+                "ลำดับ": match_count,
+                "W-2": w_minus_2,
+                "W-1": w_minus_1,
+                "W (TARGET)": w_curr,
+                "W+1": w_plus_1,
+                "W+2": w_plus_2
+            })
+            match_count += 1
+            
+    return pd.DataFrame(rows)
 
 # --- จัดการ Session State ---
 if "wc_all" not in st.session_state:
@@ -359,6 +389,9 @@ if "word_to_pos" not in st.session_state:
 if "pos_dict_sorted" not in st.session_state:
     st.session_state.pos_dict_sorted = None
 
+if "token_stream" not in st.session_state:
+    st.session_state.token_stream = []
+
 if "history_list" not in st.session_state:
     st.session_state.history_list = []
 
@@ -369,12 +402,13 @@ def apply_history():
     selected = st.session_state.selected_history
     if selected and selected != "-- เลือกดูประวัติข้อความเก่า --":
         st.session_state.current_text = selected
-        all_w, content_w, nc, w_pos, p_dict = word_count(selected)
+        all_w, content_w, nc, w_pos, p_dict, t_stream = word_count(selected)
         st.session_state.wc_all = all_w
         st.session_state.wc_content = content_w
         st.session_state.non_common_total = nc
         st.session_state.word_to_pos = w_pos
         st.session_state.pos_dict_sorted = p_dict
+        st.session_state.token_stream = t_stream
 
 # ==================== แถวที่ 1 (ซ้าย: Input Card, ขวา: 3 Metric Cards) ====================
 r1_left, r1_right = st.columns([1.3, 1], gap="medium")
@@ -401,7 +435,6 @@ with r1_left:
             height=180
         )
         
-        # จัดปุ่มประมวลผลให้อยู่กึ่งกลาง
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
         _, btn_center, _ = st.columns([1, 1.1, 1])
         with btn_center:
@@ -414,12 +447,13 @@ with r1_left:
                     st.session_state.history_list.remove(text_input)
                 st.session_state.history_list.insert(0, text_input)
                 
-                all_w, content_w, nc, w_pos, p_dict = word_count(text_input)
+                all_w, content_w, nc, w_pos, p_dict, t_stream = word_count(text_input)
                 st.session_state.wc_all = all_w
                 st.session_state.wc_content = content_w
                 st.session_state.non_common_total = nc
                 st.session_state.word_to_pos = w_pos
                 st.session_state.pos_dict_sorted = p_dict
+                st.session_state.token_stream = t_stream
                 st.rerun()
             else:
                 st.session_state.wc_all = None
@@ -427,6 +461,7 @@ with r1_left:
                 st.session_state.non_common_total = 0
                 st.session_state.word_to_pos = {}
                 st.session_state.pos_dict_sorted = None
+                st.session_state.token_stream = []
 
 with r1_right:
     total_tokens = sum(st.session_state.wc_all.values()) if st.session_state.wc_all else 0
@@ -448,7 +483,6 @@ with r1_right:
     </div>
     """, unsafe_allow_html=True)
     
-    # ส่วนปุ่มบันทึกภาพ + ปุ่มแชร์ทรงกลม
     if st.session_state.wc_all:
         img_bytes = generate_story_image(
             text_sample=st.session_state.current_text,
@@ -528,7 +562,7 @@ with r1_right:
         </head>
         <body>
             <a class="dl-btn" href="data:image/png;base64,{img_b64}" download="word_count_summary.png">
-                📸 Save Image ✨
+                📸 บันทึกภาพ (9:16)
             </a>
             <button class="circle-share-btn" onclick="triggerNativeShare()" title="แชร์">
                 <svg viewBox="0 0 24 24">
@@ -683,7 +717,34 @@ with r3_right:
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 4 (ชุดที่ 3: กราฟ POS Tag Frequency แบบเต็มแถว) ====================
+# ==================== แถวที่ 4 (ชุดที่ 3: ตาราง Co-occurrence Window ของ Top 20) ====================
+with st.container(key="table_box_colloc"):
+    st.markdown('<div class="card-title">📖 ตารางบริบทคำแวดล้อม (Co-occurrence Window: W-2, W-1, W, W+1, W+2)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำจาก Top 20 (ไม่รวม Stop Words) เพื่อดูบริบทแวดล้อม $\pm 2$ คำในแต่ละตำแหน่งที่พบ</div>', unsafe_allow_html=True)
+    
+    if st.session_state.wc_content:
+        top_20_words = list(st.session_state.wc_content.keys())[:20]
+        
+        target_colloc_word = st.selectbox(
+            label="เลือกคำเป้าหมาย (Target Word - W):",
+            options=top_20_words,
+            format_func=lambda w: f"{w}  (พบ {st.session_state.wc_content[w]} ครั้ง)"
+        )
+        
+        df_colloc = get_cooccurrence_window_df(target_colloc_word, st.session_state.token_stream)
+        
+        st.dataframe(
+            df_colloc,
+            hide_index=True,
+            use_container_width=True,
+            height=260
+        )
+    else:
+        st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
+
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 5 (ชุดที่ 4: กราฟ POS Tag Frequency แบบเต็มแถว) ====================
 if st.session_state.pos_dict_sorted:
     df_pos_summary = pd.DataFrame(
         [{"POS TAG": str(k), "COUNT": int(v)} for k, v in st.session_state.pos_dict_sorted.items()]
