@@ -10,7 +10,7 @@ import nltk
 from pythainlp import word_tokenize
 from pythainlp.tag import pos_tag as thai_pos_tag
 from pythainlp.corpus import thai_stopwords
-from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs
+from pythainlp.corpus.tnc import word_freqs as tnc_word_freqs, bigram_word_freqs as tnc_bigram_freqs
 
 # ตรวจสอบและดาวน์โหลด resource ของ nltk
 try:
@@ -20,6 +20,7 @@ except LookupError:
         nltk.download('averaged_perceptron_tagger_eng', quiet=True)
         nltk.download('averaged_perceptron_tagger', quiet=True)
         nltk.download('universal_tagset', quiet=True)
+        nltk.download('brown', quiet=True)
     except Exception:
         pass
 
@@ -152,7 +153,7 @@ st.markdown("""
     /* กล่อง Widget ฝังในสีขาว */
     .st-key-input_box, .st-key-table_box_1, .st-key-chart_box_1, 
     .st-key-table_box_2, .st-key-chart_box_2, .st-key-chart_box_pos,
-    .st-key-table_box_colloc {
+    .st-key-table_box_corpus_colloc {
         background: #ffffff !important;
         border-radius: 22px !important;
         padding: 24px !important;
@@ -197,14 +198,10 @@ def generate_story_image(text_sample, total, unique, non_common):
         font_body = font_title
         font_num = font_title
 
-    # 1. กรอบใหญ่
     draw.rounded_rectangle([60, 100, 1020, 1820], radius=44, fill=(255, 255, 255, 140), outline=(255, 255, 255), width=4)
-
-    # 2. หัวข้อ
     draw.text((120, 160), "📝 Word Counter", fill="#232536", font=font_title)
     draw.text((120, 230), "Frequency & Token Analysis Summary", fill="#7b7d96", font=font_sub)
 
-    # 3. ตัวอย่างข้อความ
     draw.rounded_rectangle([110, 310, 970, 780], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 350), "ตัวอย่างข้อความ (Sample Text):", fill="#555770", font=font_sub)
     
@@ -212,7 +209,6 @@ def generate_story_image(text_sample, total, unique, non_common):
     sample_text_display = "\n".join([l[:38] + ("..." if len(l) > 38 else "") for l in lines])
     draw.text((150, 410), sample_text_display, fill="#2b2d42", font=font_body, spacing=14)
 
-    # 4. กล่อง Metrics
     draw.rounded_rectangle([110, 830, 970, 1070], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 870), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=font_sub)
     draw.text((150, 930), f"{total:,}", fill="#232536", font=font_num)
@@ -255,7 +251,7 @@ english_stop = {
 }
 ALL_COMMON_WORDS = thai_stop.union(english_stop)
 
-# --- ดึงดัชนีความถี่คำมาตรฐานจากคลัง TNC ---
+# --- ดึงดัชนีความถี่คำมาตรฐานและ Bigram จากคลัง TNC (ไทย) และ Brown (อังกฤษ) ---
 @st.cache_data
 def get_tnc_corpus_freq():
     try:
@@ -264,7 +260,26 @@ def get_tnc_corpus_freq():
     except Exception:
         return {}
 
+@st.cache_data
+def get_tnc_bigram_corpus():
+    try:
+        b_freqs = tnc_bigram_freqs()
+        return dict(b_freqs) if b_freqs else {}
+    except Exception:
+        return {}
+
+@st.cache_data
+def get_english_bigram_corpus():
+    try:
+        from nltk.corpus import brown
+        words = [w.lower() for w in brown.words() if w.isalpha()]
+        return dict(nltk.FreqDist(nltk.bigrams(words)))
+    except Exception:
+        return {}
+
 TNC_FREQ_DICT = get_tnc_corpus_freq()
+TNC_BIGRAM_DICT = get_tnc_bigram_corpus()
+ENG_BIGRAM_DICT = get_english_bigram_corpus()
 
 def get_corpus_frequency(word: str) -> int:
     score = TNC_FREQ_DICT.get(word, 0)
@@ -275,10 +290,50 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
+# --- ค้นหาคำที่มักปรากฏร่วมในคลังภาษามาตรฐาน (General Corpus Co-occurrence) Top 10 ไม่ซ้ำ ทั้งไทย & อังกฤษ ---
+def get_corpus_cooccurrences(target_word: str):
+    if not target_word:
+        return pd.DataFrame(columns=["ลำดับ", "คำที่ปรากฏร่วม (CO-OCCURRENCE)", "ตำแหน่งที่พบบ่อย", "ความถี่ในคลังภาษามาตรฐาน"])
+    
+    cooccur_scores = {}
+    is_eng = is_english_word(target_word)
+    bigram_dict = ENG_BIGRAM_DICT if is_eng else TNC_BIGRAM_DICT
+    corpus_name = "Brown Corpus" if is_eng else "TNC Corpus"
+    t_clean = target_word.lower() if is_eng else target_word
+
+    for (w1, w2), freq in bigram_dict.items():
+        w1_cmp = w1.lower() if is_eng else w1
+        w2_cmp = w2.lower() if is_eng else w2
+        
+        if w1_cmp == t_clean and w2_cmp != t_clean:
+            if w2_cmp not in ALL_COMMON_WORDS and len(w2.strip()) > 1:
+                cooccur_scores[w2] = cooccur_scores.get(w2, {"freq": 0, "pos": "ตามหลัง (W + Word)"})
+                cooccur_scores[w2]["freq"] += freq
+        elif w2_cmp == t_clean and w1_cmp != t_clean:
+            if w1_cmp not in ALL_COMMON_WORDS and len(w1.strip()) > 1:
+                cooccur_scores[w1] = cooccur_scores.get(w1, {"freq": 0, "pos": "นำหน้า (Word + W)"})
+                cooccur_scores[w1]["freq"] += freq
+                
+    if not cooccur_scores:
+        return pd.DataFrame(columns=["ลำดับ", "คำที่ปรากฏร่วม (CO-OCCURRENCE)", "ตำแหน่งที่พบบ่อย", "ความถี่ในคลังภาษามาตรฐาน"])
+
+    sorted_cooccur = sorted(cooccur_scores.items(), key=lambda x: x[1]["freq"], reverse=True)[:10]
+    
+    rows = []
+    for idx, (co_word, meta) in enumerate(sorted_cooccur, start=1):
+        rows.append({
+            "ลำดับ": idx,
+            "คำที่ปรากฏร่วม (CO-OCCURRENCE)": co_word,
+            "ตำแหน่งที่พบบ่อย": meta["pos"],
+            "ความถี่ในคลังภาษามาตรฐาน": f"{meta['freq']:,} ครั้ง ({corpus_name})"
+        })
+        
+    return pd.DataFrame(rows)
+
 # --- ฟังก์ชันตัดและนับคำ + Multi-language POS Tagging ---
 def word_count(lyrics: str):
     if not lyrics.strip():
-        return {}, {}, 0, {}, {}, []
+        return {}, {}, 0, {}, {}
     
     lyrics_token = word_tokenize(lyrics, keep_whitespace=False)
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
@@ -342,36 +397,7 @@ def word_count(lyrics: str):
 
     pos_dict_sorted = dict(sorted(pos_dict.items(), key=operator.itemgetter(1), reverse=True))
 
-    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted, lyrics_token_clean
-
-# --- ฟังก์ชันสร้าง Co-occurrence Window Table (w-2, w-1, w, w+1, w+2) ---
-def get_cooccurrence_window_df(target_word: str, token_stream: list):
-    if not target_word or not token_stream:
-        return pd.DataFrame(columns=["ลำดับ", "W-2", "W-1", "W (TARGET)", "W+1", "W+2"])
-    
-    rows = []
-    match_count = 1
-    total_len = len(token_stream)
-    
-    for i, token in enumerate(token_stream):
-        if token == target_word:
-            w_minus_2 = token_stream[i - 2] if i >= 2 else "-"
-            w_minus_1 = token_stream[i - 1] if i >= 1 else "-"
-            w_curr = token
-            w_plus_1 = token_stream[i + 1] if i + 1 < total_len else "-"
-            w_plus_2 = token_stream[i + 2] if i + 2 < total_len else "-"
-            
-            rows.append({
-                "ลำดับ": match_count,
-                "W-2": w_minus_2,
-                "W-1": w_minus_1,
-                "W (TARGET)": w_curr,
-                "W+1": w_plus_1,
-                "W+2": w_plus_2
-            })
-            match_count += 1
-            
-    return pd.DataFrame(rows)
+    return dict(sorted_all_list), dict(sorted_content_list), non_common_total_count, word_to_pos, pos_dict_sorted
 
 # --- จัดการ Session State ---
 if "wc_all" not in st.session_state:
@@ -389,9 +415,6 @@ if "word_to_pos" not in st.session_state:
 if "pos_dict_sorted" not in st.session_state:
     st.session_state.pos_dict_sorted = None
 
-if "token_stream" not in st.session_state:
-    st.session_state.token_stream = []
-
 if "history_list" not in st.session_state:
     st.session_state.history_list = []
 
@@ -402,13 +425,12 @@ def apply_history():
     selected = st.session_state.selected_history
     if selected and selected != "-- เลือกดูประวัติข้อความเก่า --":
         st.session_state.current_text = selected
-        all_w, content_w, nc, w_pos, p_dict, t_stream = word_count(selected)
+        all_w, content_w, nc, w_pos, p_dict = word_count(selected)
         st.session_state.wc_all = all_w
         st.session_state.wc_content = content_w
         st.session_state.non_common_total = nc
         st.session_state.word_to_pos = w_pos
         st.session_state.pos_dict_sorted = p_dict
-        st.session_state.token_stream = t_stream
 
 # ==================== แถวที่ 1 (ซ้าย: Input Card, ขวา: 3 Metric Cards) ====================
 r1_left, r1_right = st.columns([1.3, 1], gap="medium")
@@ -447,13 +469,12 @@ with r1_left:
                     st.session_state.history_list.remove(text_input)
                 st.session_state.history_list.insert(0, text_input)
                 
-                all_w, content_w, nc, w_pos, p_dict, t_stream = word_count(text_input)
+                all_w, content_w, nc, w_pos, p_dict = word_count(text_input)
                 st.session_state.wc_all = all_w
                 st.session_state.wc_content = content_w
                 st.session_state.non_common_total = nc
                 st.session_state.word_to_pos = w_pos
                 st.session_state.pos_dict_sorted = p_dict
-                st.session_state.token_stream = t_stream
                 st.rerun()
             else:
                 st.session_state.wc_all = None
@@ -461,7 +482,6 @@ with r1_left:
                 st.session_state.non_common_total = 0
                 st.session_state.word_to_pos = {}
                 st.session_state.pos_dict_sorted = None
-                st.session_state.token_stream = []
 
 with r1_right:
     total_tokens = sum(st.session_state.wc_all.values()) if st.session_state.wc_all else 0
@@ -717,34 +737,7 @@ with r3_right:
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 4 (ชุดที่ 3: ตาราง Co-occurrence Window ของ Top 20) ====================
-with st.container(key="table_box_colloc"):
-    st.markdown('<div class="card-title">📖 ตารางบริบทคำแวดล้อม (Co-occurrence Window: W-2, W-1, W, W+1, W+2)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">เลือกคำจาก Top 20 (ไม่รวม Stop Words) เพื่อดูบริบทแวดล้อม $\pm 2$ คำในแต่ละตำแหน่งที่พบ</div>', unsafe_allow_html=True)
-    
-    if st.session_state.wc_content:
-        top_20_words = list(st.session_state.wc_content.keys())[:20]
-        
-        target_colloc_word = st.selectbox(
-            label="เลือกคำเป้าหมาย (Target Word - W):",
-            options=top_20_words,
-            format_func=lambda w: f"{w}  (พบ {st.session_state.wc_content[w]} ครั้ง)"
-        )
-        
-        df_colloc = get_cooccurrence_window_df(target_colloc_word, st.session_state.token_stream)
-        
-        st.dataframe(
-            df_colloc,
-            hide_index=True,
-            use_container_width=True,
-            height=260
-        )
-    else:
-        st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
-
-st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-
-# ==================== แถวที่ 5 (ชุดที่ 4: กราฟ POS Tag Frequency แบบเต็มแถว) ====================
+# ==================== แถวที่ 4 (ชุดที่ 3: กราฟ POS Tag Frequency แบบเต็มแถว) ====================
 if st.session_state.pos_dict_sorted:
     df_pos_summary = pd.DataFrame(
         [{"POS TAG": str(k), "COUNT": int(v)} for k, v in st.session_state.pos_dict_sorted.items()]
@@ -782,3 +775,34 @@ with st.container(key="chart_box_pos"):
         st.altair_chart(chart_pos, use_container_width=True)
     else:
         st.markdown("<p style='color: #8a8ca3; height: 160px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
+
+st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+# ==================== แถวที่ 5 (ชุดที่ 4: ตาราง Co-occurrence ในการใช้งานทั่วไป ทั้งไทย & อังกฤษ) ====================
+with st.container(key="table_box_corpus_colloc"):
+    st.markdown('<div class="card-title">📚 คำที่มักปรากฏร่วมในการใช้งานทั่วไป (General Corpus Co-occurrence - Top 10)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำจากข้อความ เพื่อดูว่าในการใช้งานภาษาทั่วไป (ไทย: TNC Corpus / อังกฤษ: Brown Corpus) คำนี้มักใช้คู่กับคำใดมากที่สุด 10 อันดับแรก</div>', unsafe_allow_html=True)
+    
+    if st.session_state.wc_content:
+        words_available = list(st.session_state.wc_content.keys())
+        
+        selected_target_word = st.selectbox(
+            label="เลือกคำที่ต้องการดูคำปรากฏร่วมทั่วไป:",
+            options=words_available,
+            format_func=lambda w: f"{w}  (พบในข้อความ {st.session_state.wc_content[w]} ครั้ง)"
+        )
+        
+        df_corpus_colloc = get_corpus_cooccurrences(selected_target_word)
+        
+        if not df_corpus_colloc.empty:
+            st.dataframe(
+                df_corpus_colloc,
+                hide_index=True,
+                use_container_width=True,
+                height=280
+            )
+        else:
+            corpus_name = "Brown Corpus" if is_english_word(selected_target_word) else "TNC Corpus"
+            st.info(f"ไม่พบคู่คำปรากฏร่วมของคำว่า '{selected_target_word}' ในคลังภาษามาตรฐาน {corpus_name} (อาจเป็นคำเฉพาะตัวหรือคำศัพท์ที่ไม่พบบ่อย)")
+    else:
+        st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
