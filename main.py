@@ -134,7 +134,7 @@ st.markdown("""
 # --- โหลด NLTK Resources ล่วงหน้าแบบเงียบ ---
 @st.cache_resource(show_spinner=False)
 def init_nltk():
-    needed = ['averaged_perceptron_tagger_eng', 'averaged_perceptron_tagger', 'universal_tagset', 'brown', 'inaugural']
+    needed = ['averaged_perceptron_tagger_eng', 'averaged_perceptron_tagger', 'universal_tagset', 'brown']
     for res in needed:
         try:
             nltk.data.find(res)
@@ -188,38 +188,35 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึงและเตรียมประโยคตัวอย่างจาก Corpus มาตรฐาน (ไทย & อังกฤษ) ---
-@st.cache_data(show_spinner=False)
+# --- ดึงและเตรียมประโยคตัวอย่างจาก Corpus มาตรฐาน (แก้ไข UnserializableReturnValueError) ---
+@st.cache_resource(show_spinner=False)
 def get_corpus_sentences():
-    sentences_thai = []
-    sentences_eng = []
-    
-    # 1. ภาษาไทย: ดึงประโยคตัวอย่างจาก Best2010 / PyThaiNLP Corpus
-    try:
-        from pythainlp.corpus import central_thai_words
-        sample_texts = [
-            "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงามให้กับสังคม",
-            "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่อง",
-            "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
-            "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงาม",
-            "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่มีคุณค่า",
-            "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จในที่สุด",
-            "เราควรให้ความสำคัญกับการดูแลรักษาสิ่งแวดล้อมเพื่อคนรุ่นหลัง",
-            "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดี",
-            "การอ่านหนังสือช่วยเปิดโลกทัศน์และเพิ่มพูนความรู้รอบตัวอยู่เสมอ",
-            "รอยยิ้มและความจริงใจเป็นสิ่งที่มีค่าที่สุดในการสร้างมิตรภาพ",
-            "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่มีความพร้อมมากขึ้น",
-            "สายลมหนาวพัดผ่านทุ่งหญ้าเขียวขจีในฤดูเก็บเกี่ยวของชาวบ้าน"
-        ]
-        sentences_thai = [word_tokenize(s, keep_whitespace=True) for s in sample_texts]
-    except Exception:
-        sentences_thai = []
+    # 1. ภาษาไทย: ดึงประโยคตัวอย่างจากคลังภาษาไทยมาตรฐาน
+    sample_texts = [
+        "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงามให้กับสังคม",
+        "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่อง",
+        "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
+        "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงาม",
+        "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่มีคุณค่า",
+        "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จในที่สุด",
+        "เราควรให้ความสำคัญกับการดูแลรักษาสิ่งแวดล้อมเพื่อคนรุ่นหลัง",
+        "ความสุขที่แท้จริงเกิดจากความสงบในใจและการมองโลกในแง่ดี",
+        "การอ่านหนังสือช่วยเปิดโลกทัศน์และเพิ่มพูนความรู้รอบตัวอยู่เสมอ",
+        "รอยยิ้มและความจริงใจเป็นสิ่งที่มีค่าที่สุดในการสร้างมิตรภาพ",
+        "กาลเวลาและประสบการณ์ทำให้เราเติบโตเป็นผู้ใหญ่ที่มีความพร้อมมากขึ้น",
+        "สายลมหนาวพัดผ่านทุ่งหญ้าเขียวขจีในฤดูเก็บเกี่ยวของชาวบ้าน",
+        "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรคทั้งปวง",
+        "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกายที่แข็งแรง",
+        "การเรียนรู้สิ่งใหม่ๆ ตลอดชีวิตช่วยพัฒนาศักยภาพและเปิดโอกาสใหม่ให้ตนเอง"
+    ]
+    sentences_thai = [word_tokenize(s, keep_whitespace=True) for s in sample_texts]
 
-    # 2. ภาษาอังกฤษ: ดึงประโยคจริงจาก NLTK Brown Corpus
+    # 2. ภาษาอังกฤษ: ดึงประโยคจริงจาก NLTK Brown Corpus (แปลงเป็น Plain Python List)
+    sentences_eng = []
     try:
         from nltk.corpus import brown
-        raw_sents = brown.sents()[:800] # ดึง 800 ประโยคแรกเพื่อประสิทธิภาพ
-        sentences_eng = raw_sents
+        for s in brown.sents()[:1200]:
+            sentences_eng.append([str(w) for w in s])
     except Exception:
         fallback_sents = [
             ["i", "do", "love", "you", "so", "much", "and", "forever"],
@@ -227,7 +224,9 @@ def get_corpus_sentences():
             ["all", "you", "need", "is", "love", "in", "this", "world"],
             ["she", "gave", "her", "best", "to", "achieve", "success"],
             ["we", "should", "give", "everyone", "a", "fair", "chance"],
-            ["time", "will", "heal", "everything", "and", "give", "peace"]
+            ["time", "will", "heal", "everything", "and", "give", "peace"],
+            ["music", "can", "bring", "people", "together", "in", "harmony"],
+            ["always", "keep", "your", "mind", "open", "to", "new", "ideas"]
         ]
         sentences_eng = fallback_sents
 
@@ -250,7 +249,6 @@ def search_corpus_concordance(target_word: str, max_results: int = 10):
 
     for sent_tokens in sentences:
         if is_eng:
-            # Match คำในลิสต์ tokens ภาษาอังกฤษ
             for i, token in enumerate(sent_tokens):
                 t_lower = token.lower()
                 if t_lower == target_clean or t_lower.startswith(target_clean):
@@ -268,7 +266,6 @@ def search_corpus_concordance(target_word: str, max_results: int = 10):
                     match_count += 1
                     break
         else:
-            # Match คำในลิสต์ tokens ภาษาไทย
             for i, token in enumerate(sent_tokens):
                 if token.strip() == target_clean or target_clean in token:
                     left = "".join(sent_tokens[max(0, i - 5) : i]).strip()
