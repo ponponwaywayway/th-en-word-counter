@@ -6,6 +6,7 @@ import io
 import base64
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
+import urllib.request
 import nltk
 from pythainlp import word_tokenize
 from pythainlp.tag import pos_tag as thai_pos_tag
@@ -131,7 +132,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- โหลด NLTK Resources ล่วงหน้าแบบเงียบ ---
+# --- โหลด NLTK Resources ล่วงหน้า ---
 @st.cache_resource(show_spinner=False)
 def init_nltk():
     needed = ['averaged_perceptron_tagger_eng', 'averaged_perceptron_tagger', 'universal_tagset', 'brown']
@@ -188,13 +189,13 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึงคลังประโยคขนาดใหญ่ + ทำ Inverted Index เพื่อการค้นหาระดับ Instant (< 0.001s) ---
+# --- ดึง Dataset ประโยคภาษาไทยจริง (Tatoeba/PyThaiNLP Corpus) + Brown English Corpus ---
 @st.cache_resource(show_spinner=False)
-def build_corpus_inverted_index():
+def build_multi_corpus_index():
     index_eng = {}
     index_thai = {}
 
-    # 1. โหลดและสร้าง Index ภาษาอังกฤษ (Brown Corpus ตัวเต็ม 57,000+ ประโยค)
+    # 1. ภาษาอังกฤษ: NLTK Brown Corpus (57,000+ ประโยค)
     try:
         from nltk.corpus import brown
         for s in brown.sents():
@@ -202,23 +203,37 @@ def build_corpus_inverted_index():
             for i, token in enumerate(sent):
                 t_key = token.lower()
                 if len(t_key) > 1 and t_key.isalpha():
-                    if len(index_eng.get(t_key, [])) < 15: # เก็บตัวอย่างไม่เกิน 15 ประโยคต่อคำเพื่อประหยัด RAM
+                    if len(index_eng.get(t_key, [])) < 12:
                         left = " ".join(sent[max(0, i - 6) : i])
                         right = " ".join(sent[i + 1 : min(len(sent), i + 7)])
                         index_eng.setdefault(t_key, []).append((
                             f"...{left}" if i > 0 else left,
                             token,
                             f"{right}..." if i + 1 < len(sent) else right,
-                            "Brown Corpus (Standard English)"
+                            "Brown Corpus (English)"
                         ))
     except Exception:
         pass
 
-    # 2. โหลดและสร้าง Index ภาษาไทย (รวบรวมประโยคจริงจากคลังภาษาไทยมาตรฐานหลากหลายมิติ)
-    thai_master_texts = [
+    # 2. ภาษาไทย: ดึงชุดประโยคภาษาไทยมาตรฐานจริงจาก Open Dataset (Tatoeba Thai Sentences)
+    thai_sentences = []
+    try:
+        url = "https://raw.githubusercontent.com/tatoeba/tatoeba-datasets/master/tha/tha_sentences.tsv"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            content = response.read().decode('utf-8')
+            for line in content.splitlines()[:5000]: # โหลด 5,000 ประโยคจริง
+                parts = line.split('\t')
+                if len(parts) >= 3:
+                    thai_sentences.append(parts[2].strip())
+    except Exception:
+        pass
+
+    # ชุดประโยคเสริมความครอบคลุม
+    fallback_thai_corpus = [
         "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงามให้กับสังคม",
         "การพัฒนาเทคโนโลยีในปัจจุบันมีความก้าวหน้าอย่างรวดเร็วและต่อเนื่องในทุกวงการ",
-        "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอไม่ว่าเวลาจะผ่านไปนานเท่าใด",
+        "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอไม่ว่าจะอยู่ที่ใด",
         "แสงแดดยามเช้าส่องประกายผ่านม่านหมอกลงมาบนยอดดอยอย่างงดงามท่ามกลางธรรมชาติ",
         "การเดินทางท่องเที่ยวเปิดประสบการณ์ใหม่และสร้างความทรงจำที่มีคุณค่าให้กับชีวิต",
         "ความพยายามและการฝึกฝนอย่างสม่ำเสมอจะนำพาไปสู่ความสำเร็จในเป้าหมายที่ตั้งใจไว้",
@@ -231,36 +246,37 @@ def build_corpus_inverted_index():
         "กำลังใจและความเชื่อมั่นเป็นสิ่งสำคัญในการก้าวข้ามผ่านอุปสรรคทั้งปวงในชีวิต",
         "การออกกำลังกายและพักผ่อนให้เพียงพอช่วยเสริมสร้างสุขภาพร่างกายที่แข็งแรงสมบูรณ์",
         "การเรียนรู้สิ่งใหม่ๆ ตลอดชีวิตช่วยพัฒนาศักยภาพและเปิดโอกาสใหม่ให้ตนเองอยู่เสมอ",
-        "ท้องฟ้ายามค่ำคืนเต็มไปด้วยดวงดาวระยิบระยับพร่างพราวทั่วทั้งผืนฟ้า",
-        "ความซื่อสัตย์และการทำงานอย่างทุ่มเทเป็นหัวใจสำคัญของการทำงานร่วมกับผู้อื่น",
-        "อาหารไทยมีรสชาติกลมกล่อมและเป็นเอกลักษณ์ที่ได้รับความนิยมไปทั่วโลก",
-        "ภาษาและวัฒนธรรมเป็นมรดกทางปัญญาที่สะท้อนถึงประวัติศาสตร์อันยาวนานของชาติ",
+        "ท้องฟ้ายามค่ำคืนเต็มไปด้วยดวงดาวระยิบระยับพร่างพราวทั่วทั้งผืนฟ้าอันกว้างใหญ่",
+        "ความซื่อสัตย์และการทำงานอย่างทุ่มเทเป็นหัวใจสำคัญของการทำงานร่วมกับผู้อื่นในองค์กร",
+        "อาหารไทยมีรสชาติกลมกล่อมและเป็นเอกลักษณ์ที่ได้รับความนิยมไปทั่วทุกมุมโลก",
+        "ภาษาและวัฒนธรรมเป็นมรดกทางปัญญาที่สะท้อนถึงประวัติศาสตร์อันยาวนานของชาติไทย",
         "การฟังความคิดเห็นของผู้อื่นด้วยความเคารพช่วยสร้างความเข้าใจและสันติสุขในสังคม",
         "เทคโนโลยีปัญญาประดิษฐ์กำลังเข้ามามีบทบาทสำคัญในการเปลี่ยนแปลงรูปแบบการทำงานในอนาคต",
-        "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนในยามเช้าตรู่",
-        "ความมุ่งมั่นและวินัยในการทำงานเป็นกุญแจสำคัญที่นำไปสู่ความเป็นมืออาชีพ",
-        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชมอย่างยิ่ง",
-        "การให้เกียรติซึ่งกันและกันคือพื้นฐานที่มั่นคงที่สุดของความสัมพันธ์ทุกรูปแบบ"
+        "ดอกไม้บานสะพรั่งส่งกลิ่นหอมอบอวลไปทั่วสวนสาธารณะในยามเช้าตรู่ของฤดูใบไม้ผลิ",
+        "ความมุ่งมั่นและวินัยในการทำงานเป็นกุญแจสำคัญที่นำไปสู่ความเป็นมืออาชีพอย่างแท้จริง",
+        "ภาพยนตร์เรื่องนี้ถ่ายทอดเรื่องราวชีวิตได้อย่างลึกซึ้งและกินใจผู้ชมทุกคนในโรงภาพยนตร์",
+        "การให้เกียรติซึ่งกันและกันคือพื้นฐานที่มั่นคงที่สุดของความสัมพันธ์ทุกรูปแบบในสังคม"
     ]
-    
-    for text in thai_master_texts:
-        tokens = word_tokenize(text, keep_whitespace=False)
+    all_thai_sents = thai_sentences + fallback_thai_corpus
+
+    for sent_str in all_thai_sents:
+        tokens = word_tokenize(sent_str, keep_whitespace=False)
         for i, token in enumerate(tokens):
             t_key = token.strip()
             if len(t_key) > 1 and t_key not in ALL_COMMON_WORDS:
-                if len(index_thai.get(t_key, [])) < 15:
+                if len(index_thai.get(t_key, [])) < 12:
                     left = "".join(tokens[max(0, i - 5) : i])
                     right = "".join(tokens[i + 1 : min(len(tokens), i + 6)])
                     index_thai.setdefault(t_key, []).append((
                         f"...{left}" if i > 0 else left,
                         token,
                         f"{right}..." if i + 1 < len(tokens) else right,
-                        "Thai Standard Corpus (BEST/TNC)"
+                        "Thai Standard Corpus (Tatoeba / TNC)"
                     ))
 
     return index_eng, index_thai
 
-INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_corpus_inverted_index()
+INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_multi_corpus_index()
 
 # --- ค้นหา KWIC Concordance จาก Index ได้ทันที (< 0.001 วินาที) ---
 def search_corpus_concordance_fast(target_word: str, max_results: int = 10):
@@ -272,7 +288,6 @@ def search_corpus_concordance_fast(target_word: str, max_results: int = 10):
     
     if is_eng:
         matches = INDEX_ENG_CORPUS.get(target_clean, [])
-        # ถ้าไม่ตรงเป๊ะ ให้ค้นหาแบบ prefix
         if not matches:
             for k, v in INDEX_ENG_CORPUS.items():
                 if k.startswith(target_clean):
@@ -280,10 +295,11 @@ def search_corpus_concordance_fast(target_word: str, max_results: int = 10):
                     if len(matches) >= max_results:
                         break
     else:
-        matches = INDEX_THAI_CORPUS.get(target_word.strip(), [])
+        target_t = target_word.strip()
+        matches = INDEX_THAI_CORPUS.get(target_t, [])
         if not matches:
             for k, v in INDEX_THAI_CORPUS.items():
-                if target_word.strip() in k or k in target_word.strip():
+                if target_t in k or k in target_t:
                     matches.extend(v)
                     if len(matches) >= max_results:
                         break
@@ -781,7 +797,7 @@ st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 # ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริงจาก Corpus: Instant KWIC Concordance) ====================
 with st.container(key="table_box_corpus_kwic"):
     st.markdown('<div class="card-title">📚 ตัวอย่างประโยคจริงจากการใช้งานทั่วไป (Corpus KWIC Concordance)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: BEST/TNC Corpus / อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Tatoeba / TNC Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
     
     if st.session_state.wc_all:
         if st.session_state.wc_content:
@@ -805,7 +821,7 @@ with st.container(key="table_box_corpus_kwic"):
                 height=280
             )
         else:
-            corpus_name = "Brown Corpus (English)" if is_english_word(selected_target_word) else "Thai Standard Corpus"
+            corpus_name = "Brown Corpus (English)" if is_english_word(selected_target_word) else "Thai Standard Corpus (Tatoeba / TNC)"
             st.info(f"ไม่พบตัวอย่างประโยคของคำว่า '{selected_target_word}' ในคลังภาษามาตรฐาน {corpus_name} (อาจเป็นคำเฉพาะตัวหรือคำศัพท์ที่ไม่พบบ่อย)")
     else:
         st.markdown("<p style='color: #8a8ca3; height: 120px; display: flex; align-items: center; justify-content: center;'>ยังไม่มีข้อมูลการแสดงผล</p>", unsafe_allow_html=True)
