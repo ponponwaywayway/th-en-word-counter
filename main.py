@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import operator
 import io
+import urllib.parse
 import altair as alt
 from PIL import Image, ImageDraw, ImageFont
 from pythainlp import word_tokenize
@@ -16,7 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว + ปุ่มกึ่งกลาง ---
+# --- CSS จัดการกรอบสี่เหลี่ยมใหญ่แบบมีระยะขอบ + การ์ดสีขาว + ปุ่มกึ่งกลาง + ไอคอนแชร์ SVG ---
 st.markdown("""
 <style>
     /* 1. พื้นหลัง Gradient พาสเทลทั้งหน้าจอ */
@@ -78,28 +79,46 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* 6. ปุ่มประมวลผล และปุ่มดาวน์โหลด */
-    div.stButton, div.stDownloadButton {
+    /* 6. ปุ่มประมวลผล, ปุ่มดาวน์โหลด และปุ่มแชร์ */
+    div.stButton, div.stDownloadButton, div[data-testid="stPopover"] {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
         width: 100% !important;
     }
-    div.stButton > button, div.stDownloadButton > button {
+    div.stButton > button, div.stDownloadButton > button, div[data-testid="stPopover"] > button {
         background: #34324b !important;
         color: #ffffff !important;
         border-radius: 20px !important;
-        padding: 6px 32px !important;
-        font-size: 0.95rem !important;
+        padding: 6px 24px !important;
+        font-size: 0.92rem !important;
         font-weight: 500 !important;
         border: none !important;
         box-shadow: 0 4px 12px rgba(52, 50, 75, 0.25) !important;
         transition: all 0.2s ease !important;
+        width: 100% !important;
     }
-    div.stButton > button:hover, div.stDownloadButton > button:hover {
+    div.stButton > button:hover, div.stDownloadButton > button:hover, div[data-testid="stPopover"] > button:hover {
         background: #232136 !important;
         color: #ffffff !important;
         transform: translateY(-1px);
+    }
+
+    /* 6.1 แทรกไอคอน Share SVG หน้าปุ่มแชร์ */
+    div[data-testid="stPopover"] > button {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stPopover"] > button::before {
+        content: "" !important;
+        display: inline-block !important;
+        width: 16px !important;
+        height: 16px !important;
+        background-color: #ffffff !important;
+        -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>') no-repeat center / contain !important;
+        mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>') no-repeat center / contain !important;
     }
 
     /* 7. Typography */
@@ -151,16 +170,13 @@ def generate_story_image(text_sample, total, unique, non_common):
     img = Image.new("RGB", (width, height), "#ffffff")
     draw = ImageDraw.Draw(img)
 
-    # วาดพื้นหลัง Gradient สไตล์เดียวกับเว็บ
     for y in range(height):
         factor = y / height
-        # ไล่สีจาก #d8e2fd -> #fcdbe8
         r = int(216 + (252 - 216) * factor)
         g = int(226 + (219 - 226) * factor)
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    # โหลดฟอนต์ (fallback เป็น default ถ้าไม่มีฟอนต์ภาษาไทยใน OS)
     font_paths = [
         "tahoma.ttf", "leelawad.ttf", "Thonburi.ttc", "Angsana.ttc",
         "/System/Library/Fonts/Supplemental/Thonburi.ttc",
@@ -184,38 +200,34 @@ def generate_story_image(text_sample, total, unique, non_common):
         font_body = font_title
         font_num = font_title
 
-    # 1. กรอบใหญ่ Glassmorphism
+    # 1. กรอบใหญ่
     draw.rounded_rectangle([60, 100, 1020, 1820], radius=44, fill=(255, 255, 255, 140), outline=(255, 255, 255), width=4)
 
-    # 2. หัวข้อใหญ่
+    # 2. หัวข้อ
     draw.text((120, 160), "📝 Word Counter", fill="#232536", font=font_title)
     draw.text((120, 230), "Frequency & Token Analysis Summary", fill="#7b7d96", font=font_sub)
 
-    # 3. กล่องตัวอย่าง Text
+    # 3. ตัวอย่างข้อความ
     draw.rounded_rectangle([110, 310, 970, 780], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 350), "ตัวอย่างข้อความ (Sample Text):", fill="#555770", font=font_sub)
     
-    # ตัดข้อความตัวอย่าง 6 บรรทัด
     lines = text_sample.strip().split("\n")[:7]
     sample_text_display = "\n".join([l[:38] + ("..." if len(l) > 38 else "") for l in lines])
     draw.text((150, 410), sample_text_display, fill="#2b2d42", font=font_body, spacing=14)
 
-    # 4. กล่อง Metric 1: Total Tokens
+    # 4. กล่อง Metrics
     draw.rounded_rectangle([110, 830, 970, 1070], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 870), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=font_sub)
     draw.text((150, 930), f"{total:,}", fill="#232536", font=font_num)
 
-    # 5. กล่อง Metric 2: Unique Words
     draw.rounded_rectangle([110, 1120, 970, 1360], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 1160), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=font_sub)
     draw.text((150, 1220), f"{unique:,}", fill="#232536", font=font_num)
 
-    # 6. กล่อง Metric 3: Non-Common Words
     draw.rounded_rectangle([110, 1410, 970, 1650], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
     draw.text((150, 1450), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=font_sub)
     draw.text((150, 1510), f"{non_common:,}", fill="#232536", font=font_num)
 
-    # Footer
     draw.text((380, 1720), "Created with Streamlit & PyThaiNLP", fill="#8a8ca3", font=font_body)
 
     buf = io.BytesIO()
@@ -374,7 +386,7 @@ with r1_left:
             height=180
         )
         
-        # จัดปุ่มให้อยู่กึ่งกลาง
+        # จัดปุ่มประมวลผลให้อยู่กึ่งกลาง
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
         _, btn_center, _ = st.columns([1, 1.1, 1])
         with btn_center:
@@ -421,21 +433,34 @@ with r1_right:
     </div>
     """, unsafe_allow_html=True)
     
-    # ปุ่มดาวน์โหลดรูปภาพสำหรับแชร์ลง Social Media (9:16)
+    # ส่วนปุ่มดาวน์โหลดรูปภาพ และแชร์ต่อไปยัง Social Media
     if st.session_state.wc_all:
-        img_bytes = generate_story_image(
-            text_sample=st.session_state.current_text,
-            total=total_tokens,
-            unique=unique_tokens,
-            non_common=non_common_words
-        )
-        st.download_button(
-            label="📸 บันทึกภาพสรุปผล (Story 9:16)",
-            data=img_bytes,
-            file_name="word_count_summary.png",
-            mime="image/png",
-            use_container_width=True
-        )
+        col_dl, col_share = st.columns(2, gap="small")
+        
+        with col_dl:
+            img_bytes = generate_story_image(
+                text_sample=st.session_state.current_text,
+                total=total_tokens,
+                unique=unique_tokens,
+                non_common=non_common_words
+            )
+            st.download_button(
+                label="📸 บันทึกภาพ (9:16)",
+                data=img_bytes,
+                file_name="word_count_summary.png",
+                mime="image/png",
+                use_container_width=True
+            )
+            
+        with col_share:
+            share_text = f"📊 สรุปผลการนับคำและวิเคราะห์ข้อความ:\n- คำทั้งหมด: {total_tokens:,} คำ\n- คำที่ไม่ซ้ำกัน: {unique_tokens:,} คำ\n- คำเฉพาะ/ไม่ใช่คำทั่วไป: {non_common_words:,} คำ"
+            encoded_text = urllib.parse.quote(share_text)
+            
+            with st.popover("แชร์ผลลัพธ์", use_container_width=True):
+                st.markdown("<p style='font-size: 0.88rem; font-weight: 600; color: #484a63; margin-bottom: 8px;'>เลือกช่องทางแชร์:</p>", unsafe_allow_html=True)
+                st.link_button("📱 แชร์ไปยัง LINE", f"https://line.me/R/msg/text/?{encoded_text}", use_container_width=True)
+                st.link_button("🐦 แชร์ไปยัง X (Twitter)", f"https://twitter.com/intent/tweet?text={encoded_text}", use_container_width=True)
+                st.link_button("📘 แชร์ไปยัง Facebook", f"https://www.facebook.com/sharer/sharer.php?quote={encoded_text}", use_container_width=True)
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
