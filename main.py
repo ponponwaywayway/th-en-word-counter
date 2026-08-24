@@ -347,7 +347,7 @@ def get_thai_font(size=32):
     except Exception:
         return ImageFont.load_default()
 
-# --- ฟังก์ชันสร้างภาพ 9:16 แนวตั้ง (เรียงการ์ดลงล่างตามเรฟต้นฉบับ) ---
+# --- ฟังก์ชันสร้างภาพ 9:16 แนวตั้ง (จัด Footer กึ่งกลาง + หัวข้อตัวหนาเด่นชัด) ---
 def generate_story_image(text_sample, total, unique, non_common):
     width, height = 1080, 1920
     img = Image.new("RGB", (width, height), "#f2eefa")
@@ -360,21 +360,23 @@ def generate_story_image(text_sample, total, unique, non_common):
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    f_title = get_thai_font(42)
+    f_title = get_thai_font(46)
     f_label = get_thai_font(34)
     f_body = get_thai_font(32)
     f_num = get_thai_font(88)
     f_footer = get_thai_font(24)
 
-    # 1. หัวข้อด้านบนสุด
-    draw.text((80, 80), "📝 Word Counter & Frequency Analyzer", fill="#34324b", font=f_title)
+    # 1. หัวข้อด้านบนสุด (ตัวหนาคมชัด ไม่มีอีโมจิปน)
+    title_text = "Word Counter & Frequency Analyzer"
+    draw.text((81, 81), title_text, fill="#2b2d42", font=f_title)
+    draw.text((80, 80), title_text, fill="#34324b", font=f_title)
 
-    # 2. การ์ดที่ 1: Text Input (ความสูง 500px)
-    draw.rounded_rectangle([80, 160, 1000, 680], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((120, 200), "Text Input", fill="#484a63", font=f_label)
+    # 2. การ์ดที่ 1: Text Input (ความสูง 520px)
+    draw.rounded_rectangle([80, 170, 1000, 690], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 210), "Text Input", fill="#484a63", font=f_label)
     
     lines = text_sample.strip().split("\n")
-    current_y = 270
+    current_y = 280
     max_chars = 40
     for line in lines[:8]:
         while len(line) > max_chars:
@@ -386,22 +388,30 @@ def generate_story_image(text_sample, total, unique, non_common):
             current_y += 44
 
     # 3. การ์ดที่ 2: Total Tokens
-    draw.rounded_rectangle([80, 720, 1000, 1030], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((120, 760), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=f_label)
-    draw.text((120, 860), f"{total:,}", fill="#232536", font=f_num)
+    draw.rounded_rectangle([80, 730, 1000, 1040], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 770), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=f_label)
+    draw.text((120, 870), f"{total:,}", fill="#232536", font=f_num)
 
     # 4. การ์ดที่ 3: Unique Words
-    draw.rounded_rectangle([80, 1070, 1000, 1380], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((120, 1110), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=f_label)
-    draw.text((120, 1210), f"{unique:,}", fill="#232536", font=f_num)
+    draw.rounded_rectangle([80, 1080, 1000, 1390], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 1120), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1220), f"{unique:,}", fill="#232536", font=f_num)
 
     # 5. การ์ดที่ 4: Non-Common Words
-    draw.rounded_rectangle([80, 1420, 1000, 1730], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((120, 1460), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=f_label)
-    draw.text((120, 1560), f"{non_common:,}", fill="#232536", font=f_num)
+    draw.rounded_rectangle([80, 1430, 1000, 1740], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 1470), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1570), f"{non_common:,}", fill="#232536", font=f_num)
 
-    # 6. ฟุตเตอร์ด้านล่างสุด
-    draw.text((160, 1820), "th-en-word-counter.streamlit.app  •  ponponwaywayway", fill="#8a8ca3", font=f_footer)
+    # 6. ฟุตเตอร์ด้านล่างสุด (จัดกึ่งกลางหน้าจอ 1080px พอดีเป๊ะ)
+    footer_text = "th-en-word-counter.streamlit.app  •  ponponwaywayway"
+    try:
+        bbox = draw.textbbox((0, 0), footer_text, font=f_footer)
+        text_width = bbox[2] - bbox[0]
+    except Exception:
+        text_width = len(footer_text) * 12
+    footer_x = (width - text_width) / 2
+    
+    draw.text((footer_x, 1820), footer_text, fill="#8a8ca3", font=f_footer)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
