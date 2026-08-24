@@ -347,9 +347,9 @@ def get_thai_font(size=32):
     except Exception:
         return ImageFont.load_default()
 
-# --- ฟังก์ชันสร้างภาพ 9:16 แบบกระชับ รองรับภาษาไทยสมบูรณ์ ---
+# --- ฟังก์ชันสร้างภาพ 9:16 แนวตั้ง (เรียงการ์ดลงล่างตามเรฟต้นฉบับ) ---
 def generate_story_image(text_sample, total, unique, non_common):
-    width, height = 1080, 1350
+    width, height = 1080, 1920
     img = Image.new("RGB", (width, height), "#f2eefa")
     draw = ImageDraw.Draw(img)
 
@@ -360,56 +360,48 @@ def generate_story_image(text_sample, total, unique, non_common):
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    f_title = get_thai_font(38)
-    f_label = get_thai_font(28)
-    f_body = get_thai_font(26)
-    f_num = get_thai_font(56)
-    f_footer = get_thai_font(22)
+    f_title = get_thai_font(42)
+    f_label = get_thai_font(34)
+    f_body = get_thai_font(32)
+    f_num = get_thai_font(88)
+    f_footer = get_thai_font(24)
 
-    # 1. หัวข้อด้านบน
-    draw.text((60, 45), "📝 Word Counter & Frequency Analyzer", fill="#34324b", font=f_title)
+    # 1. หัวข้อด้านบนสุด
+    draw.text((80, 80), "📝 Word Counter & Frequency Analyzer", fill="#34324b", font=f_title)
 
-    # 2. การ์ดข้อความ (Text Input)
-    draw.rounded_rectangle([60, 110, 1020, 500], radius=24, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((90, 140), "Text Input", fill="#484a63", font=f_label)
+    # 2. การ์ดที่ 1: Text Input (ความสูง 500px)
+    draw.rounded_rectangle([80, 160, 1000, 680], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 200), "Text Input", fill="#484a63", font=f_label)
     
     lines = text_sample.strip().split("\n")
-    current_y = 195
-    max_chars = 45
-    for line in lines[:5]:
+    current_y = 270
+    max_chars = 40
+    for line in lines[:8]:
         while len(line) > max_chars:
-            draw.text((90, current_y), line[:max_chars], fill="#2b2d42", font=f_body)
+            draw.text((120, current_y), line[:max_chars], fill="#2b2d42", font=f_body)
             line = line[max_chars:]
-            current_y += 36
+            current_y += 44
         if line.strip():
-            draw.text((90, current_y), line, fill="#2b2d42", font=f_body)
-            current_y += 36
+            draw.text((120, current_y), line, fill="#2b2d42", font=f_body)
+            current_y += 44
 
-    # 3. การ์ดสถิติ 3 ช่องเรียงแนวนอนด้านล่าง
-    card_width = 300
-    card_height = 220
-    start_x = 60
-    y_pos = 540
+    # 3. การ์ดที่ 2: Total Tokens
+    draw.rounded_rectangle([80, 720, 1000, 1030], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 760), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=f_label)
+    draw.text((120, 860), f"{total:,}", fill="#232536", font=f_num)
 
-    # Total Tokens
-    draw.rounded_rectangle([start_x, y_pos, start_x + card_width, y_pos + card_height], radius=24, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((start_x + 22, y_pos + 20), "Total Tokens", fill="#484a63", font=f_label)
-    draw.text((start_x + 22, y_pos + 95), f"{total:,}", fill="#232536", font=f_num)
+    # 4. การ์ดที่ 3: Unique Words
+    draw.rounded_rectangle([80, 1070, 1000, 1380], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 1110), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1210), f"{unique:,}", fill="#232536", font=f_num)
 
-    # Unique Words
-    x2 = start_x + card_width + 30
-    draw.rounded_rectangle([x2, y_pos, x2 + card_width, y_pos + card_height], radius=24, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((x2 + 22, y_pos + 20), "Unique Words", fill="#484a63", font=f_label)
-    draw.text((x2 + 22, y_pos + 95), f"{unique:,}", fill="#232536", font=f_num)
+    # 5. การ์ดที่ 4: Non-Common Words
+    draw.rounded_rectangle([80, 1420, 1000, 1730], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
+    draw.text((120, 1460), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1560), f"{non_common:,}", fill="#232536", font=f_num)
 
-    # Non-Common Words
-    x3 = x2 + card_width + 30
-    draw.rounded_rectangle([x3, y_pos, x3 + card_width, y_pos + card_height], radius=24, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
-    draw.text((x3 + 22, y_pos + 20), "Non-Common", fill="#484a63", font=f_label)
-    draw.text((x3 + 22, y_pos + 95), f"{non_common:,}", fill="#232536", font=f_num)
-
-    # 4. ฟุตเตอร์
-    draw.text((280, 1280), "th-en-word-counter.streamlit.app • ponponwaywayway", fill="#8a8ca3", font=f_footer)
+    # 6. ฟุตเตอร์ด้านล่างสุด
+    draw.text((160, 1820), "th-en-word-counter.streamlit.app  •  ponponwaywayway", fill="#8a8ca3", font=f_footer)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
