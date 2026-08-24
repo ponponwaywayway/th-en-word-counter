@@ -190,13 +190,12 @@ def get_corpus_frequency(word: str) -> int:
 def is_english_word(w: str) -> bool:
     return any('a' <= c.lower() <= 'z' for c in w)
 
-# --- ดึงและรวมทุกคลังประโยค (Wongnai + Tatoeba + Master Corpus + Brown) ---
+# --- ดึงและรวมทุกคลังประโยค (Combined Corpus) ---
 @st.cache_resource(show_spinner=False)
 def build_combined_corpus_index():
     index_eng = {}
     index_thai = {}
 
-    # 1. ภาษาอังกฤษ: NLTK Brown Corpus (57,000+ ประโยค)
     try:
         from nltk.corpus import brown
         for s in brown.sents():
@@ -216,10 +215,7 @@ def build_combined_corpus_index():
     except Exception:
         pass
 
-    # 2. รวมคลังประโยคภาษาไทยทั้งหมด
     thai_entries = []
-
-    # 2.1 ดึง Wongnai Dataset
     wongnai_url = "https://raw.githubusercontent.com/PyThaiNLP/pythainlp-corpus/master/wongnai/wongnai_reviews.txt"
     try:
         req = urllib.request.Request(wongnai_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -234,7 +230,6 @@ def build_combined_corpus_index():
     except Exception:
         pass
 
-    # 2.2 ดึง Tatoeba Thai Sentences
     tatoeba_url = "https://raw.githubusercontent.com/tatoeba/tatoeba-datasets/master/tha/tha_sentences.tsv"
     try:
         req = urllib.request.Request(tatoeba_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -247,15 +242,12 @@ def build_combined_corpus_index():
     except Exception:
         pass
 
-    # 2.3 คลังประโยคบทความและชีวิตประจำวัน
     master_sents = [
         "ฉันยังคงรอเธออยู่ที่เดิมเสมอไม่ว่าเวลาจะผ่านไปนานแค่ไหน",
         "เขากำลังยืนรอรถเมล์อยู่ที่ป้ายหน้าโรงเรียนในตอนเย็น",
         "อย่าปล่อยให้ใครต้องรอนานเกินไปเพราะเวลามีค่าสำหรับทุกคน",
         "พวกเรานั่งรอฟังผลการประกาศรางวัลด้วยความตื่นเต้นอย่างมาก",
         "การรอคอยอย่างมีความหวังช่วยให้เรามีกำลังใจในการก้าวต่อไป",
-        "ฉันยินดีที่จะรอคำตอบจากคุณเสมอด้วยความเต็มใจ",
-        "เขาบอกให้ฉันรอสักครู่ก่อนจะกลับเข้ามาคุยธุระ",
         "ความรักทำให้คนเรามีพลังในการใช้ชีวิตและสร้างสรรค์สิ่งดีงาม",
         "ความรักที่แท้จริงคือความเข้าใจและการให้อภัยซึ่งกันและกัน",
         "ดนตรีและศิลปะช่วยบำบัดจิตใจและสร้างความสุขให้กับผู้ฟังเสมอ",
@@ -292,7 +284,6 @@ def build_combined_corpus_index():
 
     sym = {'"', '[', ']', '(', ')', ',', '!', '.', '\n', '\s', ' ', '', 'ๆ', '?', ':', "'", '“', '”', '%', '-', '–', '—', '\\', '/', '>', '<', ';', '+', '*', '&', '’', '‘'}
 
-    # 2.4 สร้าง Inverted Index ภาษาไทยด้วย Exact Token
     for sent_str, source_name in thai_entries:
         tokens = word_tokenize(sent_str, engine="newmm", keep_whitespace=False)
         for i, token in enumerate(tokens):
@@ -312,7 +303,7 @@ def build_combined_corpus_index():
 
 INDEX_ENG_CORPUS, INDEX_THAI_CORPUS = build_combined_corpus_index()
 
-# --- ค้นหาจาก Corpus ภายนอกเท่านั้น (Exact Token Match) ---
+# --- ค้นหาจาก Corpus ---
 def search_external_corpus_only(target_word: str, max_results: int = 10):
     if not target_word:
         return pd.DataFrame(columns=["ลำดับ", "บริบทซ้าย (Left Context)", "คำเป้าหมาย (Key)", "บริบทขวา (Right Context)", "คลังภาษา (Corpus)"])
@@ -341,12 +332,13 @@ def search_external_corpus_only(target_word: str, max_results: int = 10):
         
     return pd.DataFrame(rows)
 
-# --- ฟังก์ชันสร้างภาพ 9:16 เพื่อแชร์ ---
+# --- ฟังก์ชันสร้างภาพ 9:16 ตามเรฟ (จำลองการ์ด UI สไตล์มินิมอล) ---
 def generate_story_image(text_sample, total, unique, non_common):
     width, height = 1080, 1920
-    img = Image.new("RGB", (width, height), "#ffffff")
+    img = Image.new("RGB", (width, height), "#f2eefa")
     draw = ImageDraw.Draw(img)
 
+    # วาดไล่ระดับสีพื้นหลังอ่อนๆ
     for y in range(height):
         factor = y / height
         r = int(216 + (252 - 216) * factor)
@@ -354,6 +346,7 @@ def generate_story_image(text_sample, total, unique, non_common):
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
+    # โหลดฟอนต์ (รองรับภาษาไทย)
     font_paths = [
         "tahoma.ttf", "leelawad.ttf", "Thonburi.ttc", "Angsana.ttc",
         "/System/Library/Fonts/Supplemental/Thonburi.ttc",
@@ -362,45 +355,65 @@ def generate_story_image(text_sample, total, unique, non_common):
     font_main = None
     for p in font_paths:
         try:
-            font_title = ImageFont.truetype(p, 54)
-            font_sub = ImageFont.truetype(p, 32)
-            font_body = ImageFont.truetype(p, 28)
-            font_num = ImageFont.truetype(p, 64)
+            f_title = ImageFont.truetype(p, 42)
+            f_label = ImageFont.truetype(p, 36)
+            f_body = ImageFont.truetype(p, 34)
+            f_num = ImageFont.truetype(p, 96)
+            f_footer = ImageFont.truetype(p, 26)
             font_main = True
             break
         except Exception:
             continue
 
     if not font_main:
-        font_title = ImageFont.load_default()
-        font_sub = font_title
-        font_body = font_title
-        font_num = font_title
+        f_title = ImageFont.load_default()
+        f_label = f_title
+        f_body = f_title
+        f_num = f_title
+        f_footer = f_title
 
-    draw.rounded_rectangle([60, 100, 1020, 1820], radius=44, fill=(255, 255, 255, 140), outline=(255, 255, 255), width=4)
-    draw.text((120, 160), "📝 Word Counter", fill="#232536", font=font_title)
-    draw.text((120, 230), "Frequency & Token Analysis Summary", fill="#7b7d96", font=font_sub)
+    # 1. หัวข้อด้านบนสุด
+    draw.text((80, 80), "📝 Word Counter & Frequency Analyzer", fill="#34324b", font=f_title)
 
-    draw.rounded_rectangle([110, 310, 970, 780], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
-    draw.text((150, 350), "ตัวอย่างข้อความ (Sample Text):", fill="#555770", font=font_sub)
+    # 2. การ์ดที่ 1: Text Input Box
+    card1_box = [80, 160, 1000, 720]
+    draw.rounded_rectangle(card1_box, radius=28, fill=(255, 255, 255, 230), outline=(230, 225, 240), width=2)
+    draw.text((120, 200), "Text Input", fill="#484a63", font=f_label)
     
-    lines = text_sample.strip().split("\n")[:7]
-    sample_text_display = "\n".join([l[:38] + ("..." if len(l) > 38 else "") for l in lines])
-    draw.text((150, 410), sample_text_display, fill="#2b2d42", font=font_body, spacing=14)
+    # ตัดแต่งข้อความตัวอย่างให้อยู่ในการ์ดพอดี
+    lines = text_sample.strip().split("\n")
+    current_y = 270
+    max_chars_per_line = 38
+    for line in lines[:8]:
+        while len(line) > max_chars_per_line:
+            chunk = line[:max_chars_per_line]
+            draw.text((120, current_y), chunk, fill="#2b2d42", font=f_body)
+            line = line[max_chars_per_line:]
+            current_y += 48
+        if line.strip():
+            draw.text((120, current_y), line, fill="#2b2d42", font=f_body)
+            current_y += 48
 
-    draw.rounded_rectangle([110, 830, 970, 1070], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
-    draw.text((150, 870), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=font_sub)
-    draw.text((150, 930), f"{total:,}", fill="#232536", font=font_num)
+    # 3. การ์ดที่ 2: Total Tokens
+    card2_box = [80, 760, 1000, 1060]
+    draw.rounded_rectangle(card2_box, radius=28, fill=(255, 255, 255, 230), outline=(230, 225, 240), width=2)
+    draw.text((120, 800), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=f_label)
+    draw.text((120, 900), f"{total:,}", fill="#232536", font=f_num)
 
-    draw.rounded_rectangle([110, 1120, 970, 1360], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
-    draw.text((150, 1160), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=font_sub)
-    draw.text((150, 1220), f"{unique:,}", fill="#232536", font=font_num)
+    # 4. การ์ดที่ 3: Unique Words
+    card3_box = [80, 1100, 1000, 1400]
+    draw.rounded_rectangle(card3_box, radius=28, fill=(255, 255, 255, 230), outline=(230, 225, 240), width=2)
+    draw.text((120, 1140), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1240), f"{unique:,}", fill="#232536", font=f_num)
 
-    draw.rounded_rectangle([110, 1410, 970, 1650], radius=28, fill="#ffffff", outline="#edf0f7", width=2)
-    draw.text((150, 1450), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=font_sub)
-    draw.text((150, 1510), f"{non_common:,}", fill="#232536", font=font_num)
+    # 5. การ์ดที่ 4: Non-Common Words
+    card4_box = [80, 1440, 1000, 1740]
+    draw.rounded_rectangle(card4_box, radius=28, fill=(255, 255, 255, 230), outline=(230, 225, 240), width=2)
+    draw.text((120, 1480), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=f_label)
+    draw.text((120, 1580), f"{non_common:,}", fill="#232536", font=f_num)
 
-    draw.text((380, 1720), "Created with Streamlit & PyThaiNLP", fill="#8a8ca3", font=font_body)
+    # 6. ฟุตเตอร์ด้านล่างสุด
+    draw.text((160, 1810), "th-en-word-counter.streamlit.app  •  ponponwaywayway", fill="#8a8ca3", font=f_footer)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -816,7 +829,7 @@ with st.container(key="chart_box_pos"):
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-# ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริงจาก Combined External Corpus) ====================
+# ==================== แถวที่ 5 (ตารางส่องตัวอย่างประโยคจริง) ====================
 with st.container(key="table_box_corpus_kwic"):
     st.markdown('<div class="card-title">📚 ตัวอย่างประโยคจริงจากการใช้งานทั่วไป (Corpus KWIC Concordance)</div>', unsafe_allow_html=True)
     st.markdown('<div class="card-subtitle">เลือกคำเพื่อดูบริบทประโยคจริงในการใช้งานทั่วไป (ไทย: Wongnai, Tatoeba & Standard Corpus | อังกฤษ: Brown Corpus)</div>', unsafe_allow_html=True)
