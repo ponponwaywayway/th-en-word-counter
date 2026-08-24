@@ -347,7 +347,7 @@ def get_thai_font(size=32):
     except Exception:
         return ImageFont.load_default()
 
-# --- ฟังก์ชันสร้างภาพ 9:16 แนวตั้ง (มีอีโมจิที่หัวข้อ, max 9 บรรทัด + ..., Footer ตรงกลาง) ---
+# --- ฟังก์ชันสร้างภาพ 9:16 แนวตั้ง (ไอคอนสมุดโน้ต, max 9 บรรทัด + ..., Footer ตรงกลาง) ---
 def generate_story_image(text_sample, total, unique, non_common):
     width, height = 1080, 1920
     img = Image.new("RGB", (width, height), "#f2eefa")
@@ -360,18 +360,26 @@ def generate_story_image(text_sample, total, unique, non_common):
         b = int(253 + (232 - 253) * factor)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    f_title = get_thai_font(44)
+    f_title = get_thai_font(46)
     f_label = get_thai_font(34)
     f_body = get_thai_font(30)
     f_num = get_thai_font(88)
     f_footer = get_thai_font(24)
 
-    # 1. หัวข้อด้านบนสุด พร้อมอีโมจิ (ทำตัวหนาโดยวาดซ้อน)
-    title_text = "📝 Word Counter & Frequency Analyzer"
-    draw.text((81, 81), title_text, fill="#2b2d42", font=f_title)
-    draw.text((80, 80), title_text, fill="#34324b", font=f_title)
+    # 1. วาดไอคอนสมุดโน้ตแทนอีโมจิ
+    icon_x, icon_y = 80, 82
+    draw.rounded_rectangle([icon_x, icon_y, icon_x + 44, icon_y + 52], radius=8, fill="#6366f1")
+    draw.rounded_rectangle([icon_x + 6, icon_y + 6, icon_x + 38, icon_y + 46], radius=4, fill="#ffffff")
+    draw.line([(icon_x + 12, icon_y + 16), (icon_x + 32, icon_y + 16)], fill="#c7d2fe", width=3)
+    draw.line([(icon_x + 12, icon_y + 26), (icon_x + 32, icon_y + 26)], fill="#c7d2fe", width=3)
+    draw.line([(icon_x + 12, icon_y + 36), (icon_x + 24, icon_y + 36)], fill="#c7d2fe", width=3)
 
-    # 2. การ์ดที่ 1: Text Input (จำกัดสูงสุด 9 บรรทัด ถ้าเกินตัด ...)
+    # 2. หัวข้อด้านบนสุด (ตัวหนาคมชัด เว้นที่ให้ไอคอน)
+    title_text = "Word Counter & Frequency Analyzer"
+    draw.text((141, 81), title_text, fill="#2b2d42", font=f_title)
+    draw.text((140, 80), title_text, fill="#34324b", font=f_title)
+
+    # 3. การ์ดที่ 1: Text Input (จำกัดสูงสุด 9 บรรทัด ถ้าเกินตัด ...)
     draw.rounded_rectangle([80, 170, 1000, 720], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
     draw.text((120, 210), "Text Input", fill="#484a63", font=f_label)
     
@@ -398,22 +406,22 @@ def generate_story_image(text_sample, total, unique, non_common):
         draw.text((120, current_y), line, fill="#2b2d42", font=f_body)
         current_y += 42
 
-    # 3. การ์ดที่ 2: Total Tokens
+    # 4. การ์ดที่ 2: Total Tokens
     draw.rounded_rectangle([80, 760, 1000, 1070], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
     draw.text((120, 800), "จำนวนคำทั้งหมด (Total Tokens)", fill="#484a63", font=f_label)
     draw.text((120, 900), f"{total:,}", fill="#232536", font=f_num)
 
-    # 4. การ์ดที่ 3: Unique Words
+    # 5. การ์ดที่ 3: Unique Words
     draw.rounded_rectangle([80, 1110, 1000, 1420], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
     draw.text((120, 1150), "จำนวนคำที่ไม่ซ้ำกัน (Unique Words)", fill="#484a63", font=f_label)
     draw.text((120, 1250), f"{unique:,}", fill="#232536", font=f_num)
 
-    # 5. การ์ดที่ 4: Non-Common Words
+    # 6. การ์ดที่ 4: Non-Common Words
     draw.rounded_rectangle([80, 1460, 1000, 1770], radius=28, fill=(255, 255, 255, 240), outline=(230, 225, 240), width=2)
     draw.text((120, 1500), "คำเฉพาะ / ไม่ใช่คำทั่วไป (Non-Common Words)", fill="#484a63", font=f_label)
     draw.text((120, 1600), f"{non_common:,}", fill="#232536", font=f_num)
 
-    # 6. ฟุตเตอร์จัดกึ่งกลาง
+    # 7. ฟุตเตอร์จัดกึ่งกลาง
     footer_text = "th-en-word-counter.streamlit.app  •  ponponwaywayway"
     try:
         bbox = draw.textbbox((0, 0), footer_text, font=f_footer)
